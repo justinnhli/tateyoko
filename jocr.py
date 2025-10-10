@@ -100,13 +100,11 @@ def pipeline(path):
         else:
             border_regions.append(region)
     array = np.zeros(array.shape)
-    for region in border_regions:
-        array[labels == region.label] = 1
+    array[np.isin(labels, [region.label for region in border_regions])] = 1
     array = (array * 255).astype('uint8')
     save_image(array)
     array = np.zeros(array.shape)
-    for region in character_regions:
-        array[labels == region.label] = 1
+    array[np.isin(labels, [region.label for region in character_regions])] = 1
     array = (array * 255).astype('uint8')
     save_image(array)
 
