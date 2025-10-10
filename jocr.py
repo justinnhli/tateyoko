@@ -30,8 +30,8 @@ def check_time(message=''):
     STATE['time'] = curr_time
 
 
-def save_image(array, mode=None):
-    image = Image.fromarray(array, mode=mode)
+def save_image(array):
+    image = Image.fromarray(array)
     filename = f'step{STATE["step"]:02d}.png'
     image.save(filename)
     check_time(f'saved {filename}')
@@ -63,15 +63,15 @@ def pipeline(path):
     # convert to grayscale
     array = rgb2gray(array)
     array = (array * 255).astype('uint8')
-    save_image(array, 'L')
+    save_image(array)
     # threshold to black-and-white
     threshold = 127
     array = (array > 127) * np.ones(array.shape)
     array = (array * 255).astype('uint8')
-    save_image(array, 'L')
+    save_image(array)
     # crop to just the page
     array = crop(array)
-    save_image(array, 'L')
+    save_image(array)
     # invert the image colors
     array = invert(array)
     save_image(array)
