@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
+from collections import defaultdict
 from datetime import datetime
+from math import inf as INF
 from pathlib import Path
+from random import Random
 
 import numpy as np
 from PIL import Image
@@ -12,6 +15,7 @@ from skimage.measure import label, regionprops
 from skimage.morphology import flood
 from skimage.util import invert
 
+RNG = Random(8675309)
 
 Line = tuple[tuple[float, float], tuple[float, float]]
 
@@ -54,6 +58,72 @@ def crop(array):
     # crop
     min_row, min_col, max_row, max_col = largest_region.bbox
     return array[min_row:max_row, min_col:max_col]
+
+
+def k_nearest_neighbors(regions, k):
+    # calculate distances between all regions
+    distances = defaultdict(dict)
+    for i, region1 in enumerate(regions):
+        centroid1 = region1.centroid
+        distances[i][i] = INF
+        for j, region2 in enumerate(regions[i+1:], start=i+1):
+            centroid2 = region2.centroid
+            dx = centroid1[0] - centroid2[0]
+            dy = centroid1[1] - centroid2[1]
+            distance = dx * dx + dy * dy
+            distances[i][j] = distance
+            distances[j][i] = distance
+    # get the k nearest neighbors
+    neighbors = []
+    for i in range(len(regions)):
+        region_distances = sorted(
+            range(len(regions)),
+            key=(lambda j: distances[i][j]),
+        )
+        neighbors.append(region_distances[:k])
+    return neighbors
+
+
+def find(union_find, i):
+    path = set()
+    rep = i
+    while union_find[rep] != rep:
+        path.add(rep)
+        rep = union_find[rep]
+    for node in path:
+        union_find[node] = rep
+    return rep
+
+
+def union(union_find, i, j):
+    path = set()
+    rep = i
+    while union_find[rep] != rep:
+        path.add(rep)
+        rep = union_find[rep]
+    path.add(rep)
+    rep = j
+    while union_find[rep] != rep:
+        path.add(rep)
+        rep = union_find[rep]
+    path.add(rep)
+    for node in path:
+        union_find[node] = rep
+    return rep
+
+
+def find_connected_components(neighbors):
+    # use union-find to identify connected components
+    union_find = {i: i for i in range(len(neighbors))}
+    for i, nearest_neighbors in enumerate(neighbors):
+        for neighbor in nearest_neighbors:
+            union(union_find, i, neighbor)
+    # extract out the connected components
+    components = defaultdict(set)
+    for i in range(len(neighbors)):
+        rep = find(union_find, i)
+        components[rep].add(i)
+    return list(components.values())
 
 
 def pipeline(path):
@@ -101,6 +171,23 @@ def pipeline(path):
     array = np.zeros(array.shape)
     array[np.isin(labels, [region.label for region in character_regions])] = 1
     array = (array * 255).astype('uint8')
+    save_image(array)
+    # find nearest neighbors and visualize
+    components = find_connected_components(k_nearest_neighbors(character_regions, 1))
+    array = np.zeros((*array.shape, 3)).astype('uint8')
+    for component in components:
+        rgb = (
+            RNG.randrange(128, 255),
+            RNG.randrange(128, 255),
+            RNG.randrange(128, 255),
+        )
+        for region_index in component:
+            region = character_regions[region_index]
+            array[labels == region.label] = np.repeat(
+                [rgb],
+                array[labels == region.label].shape[0],
+                axis=0,
+            )
     save_image(array)
 
 
