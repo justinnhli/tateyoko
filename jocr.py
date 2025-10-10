@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from imageio import imread
+from imageio.v3 import imread
 from skimage.color import rgb2gray
 from skimage.measure import label, regionprops
 from skimage.morphology import flood
