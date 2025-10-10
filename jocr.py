@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from datetime import datetime
 
 import numpy as np
 from PIL import Image
@@ -14,11 +15,24 @@ Line = tuple[tuple[float, float], tuple[float, float]]
 
 STATE = {
     'step': 0,
+    'time': datetime.now(),
 }
+
+def check_time(message=''):
+    prev_time = STATE['time']
+    curr_time = datetime.now()
+    if message:
+        print(f'{prev_time.isoformat()} (+{(curr_time - prev_time).seconds}); {message}')
+    else:
+        print(f'{prev_time.isoformat()} (+{(curr_time - prev_time).seconds})')
+    STATE['time'] = curr_time
+
 
 def save_image(array, mode=None):
     image = Image.fromarray(array, mode=mode)
-    image.save(f'step{STATE["step"]:02d}.png')
+    filename = f'step{STATE["step"]:02d}.png'
+    image.save(filename)
+    check_time(f'saved {filename}')
     STATE['step'] += 1
 
 
