@@ -148,11 +148,15 @@ def main():
     labels = label(array)
     region_props = regionprops(labels)
     array = np.zeros(array.shape)
+    min_dimension = min(array.shape[0], array.shape[1]) // 100
     max_dimension = min(array.shape[0], array.shape[1]) // 20
     for region in regionprops(labels):
         min_row, min_col, max_row, max_col = region.bbox
         width = max_col - min_col # the width of the region
         height = max_row - min_row # the height of the region
+        if width < min_dimension and height < min_dimension:
+            # discard small image artifacts
+            continue
         is_character = (
             width < max_dimension # width less than 1/20 of the image
             and height < max_dimension # height less than 1/20 of the image
