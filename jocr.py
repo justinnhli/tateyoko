@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
+from argparse import ArgumentParser
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 from PIL import Image
@@ -62,9 +64,9 @@ def crop(array, mask):
     return array[row1:row2, col1:col2]
 
 
-def main():
+def pipeline(path):
     # read the image
-    array = imread('Ranking-Bunjin suikoden.jpg')
+    array = imread(path)
     save_image(array)
     # convert to grayscale
     array = rgb2gray(array)
@@ -116,6 +118,15 @@ def main():
         array[labels == region.label] = 1
     array = (array * 255).astype('uint8')
     save_image(array)
+
+
+def main():
+    arg_parser = ArgumentParser()
+    arg_parser.add_argument('images', metavar='image', type=Path, nargs='+')
+    args = arg_parser.parse_args()
+    args.images = sorted(set(path.expanduser().resolve() for path in args.images))
+    for image_path in args.images:
+        pipeline(image_path)
 
 
 if __name__ == '__main__':
