@@ -68,7 +68,7 @@ def main():
     # invert the image colors
     array = invert(array)
     save_image(array)
-    # remove small regions that are not part of the grid
+    # separate characters from borders
     labels = label(array)
     array = np.zeros(array.shape)
     character_regions = []
