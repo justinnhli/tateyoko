@@ -148,6 +148,8 @@ def main():
     labels = label(array)
     region_props = regionprops(labels)
     array = np.zeros(array.shape)
+    character_regions = []
+    border_regions = []
     min_dimension = min(array.shape[0], array.shape[1]) // 100
     max_dimension = min(array.shape[0], array.shape[1]) // 20
     for region in regionprops(labels):
@@ -163,38 +165,20 @@ def main():
             and (width / height) < 10 # width:height ratio less than 10
             and (height / width) < 10 # height:width ratio less than 10
         )
-        if not is_character:
-            array[labels == region.label] = 1
+        if is_character:
+            character_regions.append(region)
+        else:
+            border_regions.append(region)
+    array = np.zeros(array.shape)
+    for region in border_regions:
+        array[labels == region.label] = 1
     array = (array * 255).astype('uint8')
     save_image(array)
-    # perform Canny edge detection
-    array = canny(array)
+    array = np.zeros(array.shape)
+    for region in character_regions:
+        array[labels == region.label] = 1
+    array = (array * 255).astype('uint8')
     save_image(array)
-    # apply Hough transform to identify straight lines
-    lines = hough_transform(array)
-    print(f'{len(lines)} lines found')
-    image = visualize_lines(clean_array, lines)
-    image.save(f'step{STATE["step"]:02d}.png')
-    STATE['step'] += 1
-    # filter out lines that do not cross enough ink
-    '''
-    The original intention was to use skimage.draw.line to determine the relevant pixels.
-    The problem is that the function only takes integers, and rounding leads to numerical
-    instability. This step is skipped for now until this can be resolved.
-    '''
-    pass # FIXME
-    # determine pacing of cells
-
-
-
-    '''
-    # perform Canny edge detection
-    array = canny(array)
-    save_image(array)
-    # fill interiors
-    array = ndimage.binary_fill_holes(array)
-    save_image(array)
-    '''
 
 
 if __name__ == '__main__':
