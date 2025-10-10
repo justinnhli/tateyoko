@@ -60,13 +60,8 @@ def pipeline(path):
     # read the image
     array = imread(path)
     save_image(array)
-    # convert to grayscale
-    array = rgb2gray(array)
-    array = (array * 255).astype('uint8')
-    save_image(array)
-    # threshold to black-and-white
-    threshold = 127
-    array = (array > 127) * np.ones(array.shape)
+    # convert to black-and-white
+    array = (rgb2gray(array) * 255 > 127) * np.ones(array.shape[:2])
     array = (array * 255).astype('uint8')
     save_image(array)
     # crop to just the page
