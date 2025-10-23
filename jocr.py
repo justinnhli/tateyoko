@@ -60,6 +60,38 @@ def crop(array):
     return array[min_row:max_row, min_col:max_col]
 
 
+def identify_characters_borders(array):
+    character_regions = []
+    border_regions = []
+    min_dimension = min(array.shape[0], array.shape[1]) // 100
+    max_dimension = min(array.shape[0], array.shape[1]) // 20
+    labels = label(array)
+    for region in regionprops(labels):
+        min_row, min_col, max_row, max_col = region.bbox
+        width = max_col - min_col # the width of the region
+        height = max_row - min_row # the height of the region
+        if width < min_dimension and height < min_dimension:
+            # discard small image artifacts
+            continue
+        is_character = (
+            width < max_dimension # width less than 1/20 of the image
+            and height < max_dimension # height less than 1/20 of the image
+            and (width / height) < 10 # width:height ratio less than 10
+            and (height / width) < 10 # height:width ratio less than 10
+        )
+        if is_character:
+            character_regions.append(region)
+        else:
+            border_regions.append(region)
+    return labels, character_regions, border_regions
+
+
+def visualize_regions(labels, regions):
+    array = np.zeros(labels.shape)
+    array[np.isin(labels, [region.label for region in regions])] = 1
+    save_image((array * 255).astype('uint8'))
+
+
 def k_nearest_neighbors(regions, k):
     # calculate distances between all regions
     distances = defaultdict(dict)
@@ -141,37 +173,9 @@ def pipeline(path):
     array = invert(array)
     save_image(array)
     # separate characters from borders
-    labels = label(array)
-    array = np.zeros(array.shape)
-    character_regions = []
-    border_regions = []
-    min_dimension = min(array.shape[0], array.shape[1]) // 100
-    max_dimension = min(array.shape[0], array.shape[1]) // 20
-    for region in regionprops(labels):
-        min_row, min_col, max_row, max_col = region.bbox
-        width = max_col - min_col # the width of the region
-        height = max_row - min_row # the height of the region
-        if width < min_dimension and height < min_dimension:
-            # discard small image artifacts
-            continue
-        is_character = (
-            width < max_dimension # width less than 1/20 of the image
-            and height < max_dimension # height less than 1/20 of the image
-            and (width / height) < 10 # width:height ratio less than 10
-            and (height / width) < 10 # height:width ratio less than 10
-        )
-        if is_character:
-            character_regions.append(region)
-        else:
-            border_regions.append(region)
-    array = np.zeros(array.shape)
-    array[np.isin(labels, [region.label for region in border_regions])] = 1
-    array = (array * 255).astype('uint8')
-    save_image(array)
-    array = np.zeros(array.shape)
-    array[np.isin(labels, [region.label for region in character_regions])] = 1
-    array = (array * 255).astype('uint8')
-    save_image(array)
+    labels, character_regions, border_regions = identify_characters_borders(array)
+    visualize_regions(labels, border_regions)
+    visualize_regions(labels, character_regions)
     # find nearest neighbors and visualize
     components = find_connected_components(k_nearest_neighbors(character_regions, 1))
     array = np.zeros((*array.shape, 3)).astype('uint8')
