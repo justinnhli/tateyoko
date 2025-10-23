@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
-from itertools import combinations
 from collections import defaultdict
 from datetime import datetime
-from math import inf as INF
 from pathlib import Path
 from random import Random
 
@@ -93,26 +91,76 @@ def visualize_regions(labels, regions):
     save_image((array * 255).astype('uint8'))
 
 
-def k_nearest_neighbors(regions, k):
-    # calculate distances between all regions
-    distances = defaultdict(list)
-    for region1, region2 in combinations(regions, 2):
-        i = region1.label
-        j = region2.label
-        centroid1 = region1.centroid
-        centroid2 = region2.centroid
-        dx = centroid1[0] - centroid2[0]
-        dy = centroid1[1] - centroid2[1]
-        distance = dx * dx + dy * dy
-        distances[i].append((distance, j))
-        distances[j].append((distance, i))
-    # get the k nearest neighbors
-    neighbors = {}
-    for this_label, region_distances in distances.items():
-        neighbors[this_label] = [
-            pair[1] for pair in sorted(region_distances)[:k]
+def hash_grid_radii_diffs(max_radius):
+    yield 0, [(0, 0)]
+    for radius in range(1, max_radius):
+        radius_keys = [
+            (-radius, -radius),
+            (-radius, radius),
+            (radius, -radius),
+            (radius, radius),
         ]
-    return neighbors
+        for dim1_diff in range(-radius + 1, radius):
+            for dim2_diff in (-radius, radius):
+                radius_keys.append((dim1_diff, dim2_diff))
+                radius_keys.append((dim2_diff, dim1_diff))
+        yield radius, radius_keys
+
+
+def k_nearest_neighbors(regions, k, grid_size):
+    # initialize the hash grid by putting each region in the appropriate grid cell
+    keys = []
+    hash_grid = defaultdict(list)
+    for region in regions:
+        key = (region.centroid[0] // grid_size, region.centroid[1] // grid_size)
+        keys.append(key)
+        hash_grid[key].append(region)
+    # initialize result variables
+    distance_cache = {}
+    all_nearest_neighbors = {}
+    # loop over each region to look for its nearest neighbors
+    for this_key, this_region in zip(keys, regions):
+        this_centroid = this_region.centroid
+        away_neighbors = []
+        near_neighbors = []
+        for radius, diffs in hash_grid_radii_diffs(len(hash_grid)):
+            # pre-calculate the maximum distance we will consider, accounting for grid squareness
+            radius_squared = radius * radius * grid_size * grid_size
+            # loop over the grid cells in the larger radius
+            for diff in diffs:
+                that_key = (this_key[0] + diff[0], this_key[1] + diff[1])
+                # loop over the regions in that grid cell
+                for that_region in hash_grid[that_key]:
+                    # skip over the region itself
+                    if that_region.label == this_region.label:
+                        continue
+                    that_centroid = that_region.centroid
+                    # retrieve or calculate the distance between regions
+                    distance_key = tuple(sorted([this_centroid, that_centroid]))
+                    if distance_key not in distance_cache:
+                        dx = this_centroid[0] - that_centroid[0]
+                        dy = this_centroid[1] - that_centroid[1]
+                        distance_cache[distance_key] = dx * dx + dy * dy
+                    distance = distance_cache[distance_key]
+                    away_neighbors.append((distance, that_region.label))
+            # add regions that were too far away but are now eligible
+            new_away_neighbors = []
+            for distance, that_label in away_neighbors:
+                if distance <= radius_squared:
+                    near_neighbors.append((distance, that_label))
+                else:
+                    new_away_neighbors.append((distance, that_label))
+            away_neighbors = new_away_neighbors
+            # if there are enough near neighbors, store it and move on
+            if len(near_neighbors) >= k:
+                all_nearest_neighbors[this_region.label] = [
+                    pair[1] for pair in sorted(near_neighbors)[:k]
+                ]
+                result = all_nearest_neighbors[this_region.label]
+                assert len(result) == len(set(result))
+                break
+    # return the list of nearest neighbors
+    return all_nearest_neighbors
 
 
 def find(union_find, i):
@@ -177,7 +225,12 @@ def pipeline(path):
     visualize_regions(labels, border_regions)
     visualize_regions(labels, character_regions)
     # find nearest neighbors and visualize
-    components = find_connected_components(k_nearest_neighbors(character_regions.values(), 1))
+    nearest_neighbors = k_nearest_neighbors(
+        character_regions.values(),
+        1,
+        min(array.shape[0], array.shape[1]) // 20,
+    )
+    components = find_connected_components(nearest_neighbors)
     array = np.zeros((*array.shape, 3)).astype('uint8')
     for component in components:
         rgb = (
