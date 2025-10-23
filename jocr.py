@@ -38,7 +38,7 @@ def save_image(array, mode=None):
     STATE['step'] += 1
 
 
-def create_crop_mask(array):
+def crop(array):
     # type: (np.ndarray) -> np.ndarray
     """Crop to the contents of the page."""
     # assume the topleft pixel is the background and flood it
@@ -46,22 +46,14 @@ def create_crop_mask(array):
     # label all regions that were not flooded (label() considers 0 as background by default)
     flooded = (invert(flood_mask) * np.ones(array.shape) * 255).astype('uint8')
     labels = label(flooded)
-    # return a mask of the largest region
+    # find the largest region
     largest_region = max(
         regionprops(labels),
         key=(lambda region: region.area),
     )
-    return labels == largest_region.label
-
-
-def crop(array, mask):
-    # type: (np.ndarray, np.ndarray) -> np.ndarray
-    rows, columns = np.where(mask)
-    row1 = min(rows)
-    row2 = max(rows)
-    col1 = min(columns)
-    col2 = max(columns)
-    return array[row1:row2, col1:col2]
+    # crop
+    min_row, min_col, max_row, max_col = largest_region.bbox
+    return array[min_row:max_row, min_col:max_col]
 
 
 def pipeline(path):
@@ -78,8 +70,7 @@ def pipeline(path):
     array = (array * 255).astype('uint8')
     save_image(array, 'L')
     # crop to just the page
-    crop_mask = create_crop_mask(array)
-    array = crop(array, crop_mask)
+    array = crop(array)
     save_image(array, 'L')
     # invert the image colors
     array = invert(array)
