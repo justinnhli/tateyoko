@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
+from itertools import combinations
 from collections import defaultdict
 from datetime import datetime
 from math import inf as INF
@@ -61,8 +62,8 @@ def crop(array):
 
 
 def identify_characters_borders(array):
-    character_regions = []
-    border_regions = []
+    character_regions = {}
+    border_regions = {}
     min_dimension = min(array.shape[0], array.shape[1]) // 100
     max_dimension = min(array.shape[0], array.shape[1]) // 20
     labels = label(array)
@@ -80,39 +81,37 @@ def identify_characters_borders(array):
             and (height / width) < 10 # height:width ratio less than 10
         )
         if is_character:
-            character_regions.append(region)
+            character_regions[region.label] = region
         else:
-            border_regions.append(region)
+            border_regions[region.label] = region
     return labels, character_regions, border_regions
 
 
 def visualize_regions(labels, regions):
     array = np.zeros(labels.shape)
-    array[np.isin(labels, [region.label for region in regions])] = 1
+    array[np.isin(labels, list(regions.keys()))] = 1
     save_image((array * 255).astype('uint8'))
 
 
 def k_nearest_neighbors(regions, k):
     # calculate distances between all regions
-    distances = defaultdict(dict)
-    for i, region1 in enumerate(regions):
+    distances = defaultdict(list)
+    for region1, region2 in combinations(regions, 2):
+        i = region1.label
+        j = region2.label
         centroid1 = region1.centroid
-        distances[i][i] = INF
-        for j, region2 in enumerate(regions[i+1:], start=i+1):
-            centroid2 = region2.centroid
-            dx = centroid1[0] - centroid2[0]
-            dy = centroid1[1] - centroid2[1]
-            distance = dx * dx + dy * dy
-            distances[i][j] = distance
-            distances[j][i] = distance
+        centroid2 = region2.centroid
+        dx = centroid1[0] - centroid2[0]
+        dy = centroid1[1] - centroid2[1]
+        distance = dx * dx + dy * dy
+        distances[i].append((distance, j))
+        distances[j].append((distance, i))
     # get the k nearest neighbors
-    neighbors = []
-    for i in range(len(regions)):
-        region_distances = sorted(
-            range(len(regions)),
-            key=(lambda j: distances[i][j]),
-        )
-        neighbors.append(region_distances[:k])
+    neighbors = {}
+    for this_label, region_distances in distances.items():
+        neighbors[this_label] = [
+            pair[1] for pair in sorted(region_distances)[:k]
+        ]
     return neighbors
 
 
@@ -145,16 +144,17 @@ def union(union_find, i, j):
 
 
 def find_connected_components(neighbors):
+    # type: (Mapping[int, Region]) -> list[set[int]]
     # use union-find to identify connected components
-    union_find = {i: i for i in range(len(neighbors))}
-    for i, nearest_neighbors in enumerate(neighbors):
+    union_find = {label: label for label in neighbors}
+    for label, nearest_neighbors in neighbors.items():
         for neighbor in nearest_neighbors:
-            union(union_find, i, neighbor)
+            union(union_find, label, neighbor)
     # extract out the connected components
     components = defaultdict(set)
-    for i in range(len(neighbors)):
-        rep = find(union_find, i)
-        components[rep].add(i)
+    for label in neighbors:
+        rep = find(union_find, label)
+        components[rep].add(label)
     return list(components.values())
 
 
@@ -177,7 +177,7 @@ def pipeline(path):
     visualize_regions(labels, border_regions)
     visualize_regions(labels, character_regions)
     # find nearest neighbors and visualize
-    components = find_connected_components(k_nearest_neighbors(character_regions, 1))
+    components = find_connected_components(k_nearest_neighbors(character_regions.values(), 1))
     array = np.zeros((*array.shape, 3)).astype('uint8')
     for component in components:
         rgb = (
