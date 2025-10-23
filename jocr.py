@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 from imageio.v3 import imread
 from skimage.color import rgb2gray
-from skimage.measure import label, regionprops
+from skimage.measure import label as skimage_label, regionprops
 from skimage.morphology import flood
 from skimage.util import invert
 
@@ -24,6 +24,7 @@ STATE = {
 }
 
 def check_time(message=''):
+    """Print out the current and elapsed time."""
     prev_time = STATE['time']
     curr_time = datetime.now()
     if message:
@@ -34,6 +35,7 @@ def check_time(message=''):
 
 
 def save_image(array):
+    """Save the array as an image, with an auto-incremented filename."""
     image = Image.fromarray(array)
     filename = f'step{STATE["step"]:02d}.png'
     image.save(filename)
@@ -42,13 +44,12 @@ def save_image(array):
 
 
 def crop(array):
-    # type: (np.ndarray) -> np.ndarray
     """Crop to the contents of the page."""
     # assume the topleft pixel is the background and flood it
     flood_mask = flood(array, (0, 0))
-    # label all regions that were not flooded (label() considers 0 as background by default)
+    # label all regions that were not flooded (skimage_label() considers 0 as background by default)
     flooded = (invert(flood_mask) * np.ones(array.shape) * 255).astype('uint8')
-    labels = label(flooded)
+    labels = skimage_label(flooded)
     # find the largest region
     largest_region = max(
         regionprops(labels),
@@ -60,11 +61,12 @@ def crop(array):
 
 
 def identify_characters_borders(array):
+    """Identify character and border (and artifact) regions."""
     character_regions = {}
     border_regions = {}
     min_dimension = min(array.shape[0], array.shape[1]) // 100
     max_dimension = min(array.shape[0], array.shape[1]) // 20
-    labels = label(array)
+    labels = skimage_label(array)
     for region in regionprops(labels):
         min_row, min_col, max_row, max_col = region.bbox
         width = max_col - min_col # the width of the region
@@ -86,12 +88,14 @@ def identify_characters_borders(array):
 
 
 def visualize_regions(labels, regions):
+    """Create a visualization of different region components."""
     array = np.zeros(labels.shape)
     array[np.isin(labels, list(regions.keys()))] = 1
     save_image((array * 255).astype('uint8'))
 
 
-def hash_grid_radii_diffs(max_radius):
+def hash_grid_radius_offsets(max_radius):
+    """Generate the offsets for each radius away."""
     yield 0, [(0, 0)]
     for radius in range(1, max_radius):
         radius_keys = [
@@ -108,6 +112,30 @@ def hash_grid_radii_diffs(max_radius):
 
 
 def k_nearest_neighbors(regions, k, grid_size):
+    """Find the k nearest neighbors for each region.
+
+    This implementation of kNN uses a hash grid to avoid unnecessary distance
+    calculations. A hash grid assigns every point to a larger grid cell - for
+    example, if the grid size is 10, the points (5, 13) and (6, 16) would both
+    be assigned to grid cell (0, 10), while (57, 34) would be assigned to (50,
+    30). To find the k nearest neighbors for a point, start by only checking
+    distances to other points in the same grid cell, then to points one cell
+    away, then two away, etc., until k neighbors are found. This avoids the need
+    to check against points far away, in turn meaning that it is more efficient
+    than the naive O(n^2) approach of checking every point against every other
+    point. Empirically, for ~1300 points, this implementation is ~30% faster
+    than the naive algorithm.
+
+    Because grid cells are square, and because a point can be anywhere within a
+    cell, care must be taken when determining whether neighbors are actually the
+    nearest ones. (1, 1) and (19, 19) are one cell away (squared distance: 648),
+    but are further apart than (1, 1) and (1, 21) despite the latter being two
+    cells away (squared distance: 400). More generally, cells that are a radius
+    `r` away could contain points `(r-1)*grid_size` to `sqrt(2)*r*grid_size`
+    apart. The algorithm therefore only considers points nearer than the lower
+    bound as confirmed, while keeping track of the further away points to be
+    added later.
+    """
     # initialize the hash grid by putting each region in the appropriate grid cell
     keys = []
     hash_grid = defaultdict(list)
@@ -123,12 +151,12 @@ def k_nearest_neighbors(regions, k, grid_size):
         this_centroid = this_region.centroid
         away_neighbors = []
         near_neighbors = []
-        for radius, diffs in hash_grid_radii_diffs(len(hash_grid)):
+        for radius, offsets in hash_grid_radius_offsets(len(hash_grid)):
             # pre-calculate the maximum distance we will consider, accounting for grid squareness
-            radius_squared = radius * radius * grid_size * grid_size
+            max_distance = radius * radius * grid_size * grid_size
             # loop over the grid cells in the larger radius
-            for diff in diffs:
-                that_key = (this_key[0] + diff[0], this_key[1] + diff[1])
+            for offset in offsets:
+                that_key = (this_key[0] + offset[0], this_key[1] + offset[1])
                 # loop over the regions in that grid cell
                 for that_region in hash_grid[that_key]:
                     # skip over the region itself
@@ -146,7 +174,7 @@ def k_nearest_neighbors(regions, k, grid_size):
             # add regions that were too far away but are now eligible
             new_away_neighbors = []
             for distance, that_label in away_neighbors:
-                if distance <= radius_squared:
+                if distance <= max_distance:
                     near_neighbors.append((distance, that_label))
                 else:
                     new_away_neighbors.append((distance, that_label))
@@ -192,7 +220,6 @@ def union(union_find, i, j):
 
 
 def find_connected_components(neighbors):
-    # type: (Mapping[int, Region]) -> list[set[int]]
     # use union-find to identify connected components
     union_find = {label: label for label in neighbors}
     for label, nearest_neighbors in neighbors.items():
