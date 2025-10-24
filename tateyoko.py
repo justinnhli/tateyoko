@@ -27,9 +27,9 @@ STATE = {
 
 
 def reset_state():
-   STATE['filepath'] = Path()
-   STATE['step'] = 0
-   STATE['time'] = datetime.now()
+    STATE['filepath'] = Path()
+    STATE['step'] = 0
+    STATE['time'] = datetime.now()
 
 
 def check_time(message=''):
@@ -156,7 +156,7 @@ def k_nearest_neighbors(regions, k, grid_size, no_mans_land):
     no_mans_coords = set(zip(*np.nonzero(no_mans_land)))
     keys = []
     hash_grid = defaultdict(list)
-    all_nearest_neighbors = {}
+    all_nearest_neighbors = {} # type: dict[int, list[int]]
     for region in regions:
         key = (region.centroid[0] // grid_size, region.centroid[1] // grid_size)
         keys.append(key)
@@ -177,7 +177,7 @@ def k_nearest_neighbors(regions, k, grid_size, no_mans_land):
                 that_key = (this_key[0] + offset[0], this_key[1] + offset[1])
                 # loop over the regions in that grid cell
                 for that_region in hash_grid[that_key]:
-                    # skip over the region itself
+                    # skip over the original region
                     if that_region.label == this_region.label:
                         continue
                     that_centroid = that_region.centroid
@@ -209,7 +209,6 @@ def k_nearest_neighbors(regions, k, grid_size, no_mans_land):
         assert len(result) == len(set(result))
     # return the list of nearest neighbors
     return all_nearest_neighbors
-
 
 
 def find(union_find, i):
