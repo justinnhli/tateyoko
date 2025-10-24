@@ -268,7 +268,7 @@ def visualize_components(regions, labels, components):
     save_image(array)
 
 
-def pipeline(path):
+def pipeline(path, k):
     STATE['filepath'] = path
     # read the image
     array = imread(path)
@@ -290,7 +290,7 @@ def pipeline(path):
     # find nearest neighbors and visualize
     nearest_neighbors = k_nearest_neighbors(
         character_regions.values(),
-        1,
+        k,
         min(array.shape[0], array.shape[1]) // 20,
     )
     components = find_connected_components(nearest_neighbors)
@@ -300,10 +300,11 @@ def pipeline(path):
 def main():
     arg_parser = ArgumentParser()
     arg_parser.add_argument('images', metavar='image', type=Path, nargs='+')
+    arg_parser.add_argument('-k', default=3)
     args = arg_parser.parse_args()
     args.images = sorted(set(path.expanduser().resolve() for path in args.images))
     for image_path in args.images:
-        pipeline(image_path)
+        pipeline(image_path, k=args.k)
 
 
 if __name__ == '__main__':
