@@ -19,6 +19,7 @@ RNG = Random(8675309)
 Line = tuple[tuple[float, float], tuple[float, float]]
 
 STATE = {
+    'filepath': Path(),
     'step': 0,
     'time': datetime.now(),
 }
@@ -37,7 +38,7 @@ def check_time(message=''):
 def save_image(array):
     """Save the array as an image, with an auto-incremented filename."""
     image = Image.fromarray(array)
-    filename = f'step{STATE["step"]:02d}.png'
+    filename = f'{STATE["filepath"].stem}-step{STATE["step"]:02d}.png'
     image.save(filename)
     check_time(f'saved {filename}')
     STATE['step'] += 1
@@ -234,6 +235,7 @@ def find_connected_components(neighbors):
 
 
 def pipeline(path):
+    STATE['filepath'] = path
     # read the image
     array = imread(path)
     save_image(array)
