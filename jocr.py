@@ -9,6 +9,7 @@ from random import Random
 import numpy as np
 from PIL import Image
 from imageio.v3 import imread
+from skimage.draw import rectangle_perimeter
 from skimage.color import rgb2gray
 from skimage.measure import label as skimage_label, regionprops
 from skimage.morphology import flood
@@ -234,6 +235,39 @@ def find_connected_components(neighbors):
     return list(components.values())
 
 
+def visualize_components(regions, labels, components):
+    array = np.zeros((*labels.shape, 3)).astype(np.uint8)
+    for component in components:
+        rgb = (
+            RNG.randrange(128, 255),
+            RNG.randrange(128, 255),
+            RNG.randrange(128, 255),
+        )
+        array_min_row, array_min_col = array.shape[:2]
+        array_max_row = 0
+        array_max_col = 0
+        for region_index in component:
+            region = regions[region_index]
+            array[labels == region.label] = np.repeat(
+                [rgb],
+                array[labels == region.label].shape[0],
+                axis=0,
+            )
+            min_row, min_col, max_row, max_col = region.bbox
+            array_min_row = min(min_row, array_min_row)
+            array_min_col = min(min_col, array_min_col)
+            array_max_row = max(max_row, array_max_row)
+            array_max_col = max(max_col, array_max_col)
+        perimeter_mask = rectangle_perimeter(
+            start=(array_min_row, array_min_col),
+            end=(array_max_row, array_max_col),
+            shape=array.shape,
+            clip=True,
+        )
+        array[perimeter_mask] = rgb
+    save_image(array)
+
+
 def pipeline(path):
     STATE['filepath'] = path
     # read the image
@@ -260,21 +294,7 @@ def pipeline(path):
         min(array.shape[0], array.shape[1]) // 20,
     )
     components = find_connected_components(nearest_neighbors)
-    array = np.zeros((*array.shape, 3)).astype('uint8')
-    for component in components:
-        rgb = (
-            RNG.randrange(128, 255),
-            RNG.randrange(128, 255),
-            RNG.randrange(128, 255),
-        )
-        for region_index in component:
-            region = character_regions[region_index]
-            array[labels == region.label] = np.repeat(
-                [rgb],
-                array[labels == region.label].shape[0],
-                axis=0,
-            )
-    save_image(array)
+    visualize_components(character_regions, labels, components)
 
 
 def main():
