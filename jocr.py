@@ -50,7 +50,7 @@ def crop(array):
     # assume the topleft pixel is the background and flood it
     flood_mask = flood(array, (0, 0))
     # label all regions that were not flooded (skimage_label() considers 0 as background by default)
-    flooded = (invert(flood_mask) * np.ones(array.shape) * 255).astype('uint8')
+    flooded = (invert(flood_mask) * np.ones(array.shape) * 255).astype(np.uint8)
     labels = skimage_label(flooded)
     # find the largest region
     largest_region = max(
@@ -93,7 +93,7 @@ def visualize_regions(labels, regions):
     """Create a visualization of different region components."""
     array = np.zeros(labels.shape)
     array[np.isin(labels, list(regions.keys()))] = 1
-    save_image((array * 255).astype('uint8'))
+    save_image((array * 255).astype(np.uint8))
 
 
 def hash_grid_radius_offsets(max_radius):
@@ -275,7 +275,7 @@ def pipeline(path):
     save_image(array)
     # convert to black-and-white
     array = (rgb2gray(array) * 255 > 127) * np.ones(array.shape[:2])
-    array = (array * 255).astype('uint8')
+    array = (array * 255).astype(np.uint8)
     save_image(array)
     # crop to just the page
     array = crop(array)
