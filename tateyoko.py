@@ -25,6 +25,13 @@ STATE = {
     'time': datetime.now(),
 }
 
+
+def reset_state():
+   STATE['filepath'] = Path()
+   STATE['step'] = 0
+   STATE['time'] = datetime.now()
+
+
 def check_time(message=''):
     """Print out the current and elapsed time."""
     prev_time = STATE['time']
@@ -281,6 +288,7 @@ def visualize_components(regions, labels, components):
 
 
 def pipeline(path, k):
+    reset_state()
     STATE['filepath'] = path
     # read the image
     array = imread(path)
