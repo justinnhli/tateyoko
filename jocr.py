@@ -172,22 +172,22 @@ def k_nearest_neighbors(regions, k, grid_size):
                         dy = this_centroid[1] - that_centroid[1]
                         distance_cache[distance_key] = dx * dx + dy * dy
                     distance = distance_cache[distance_key]
-                    away_neighbors.append((distance, that_region.label))
+                    away_neighbors.append((distance, that_region))
             # add regions that were too far away but are now eligible
             new_away_neighbors = []
-            for distance, that_label in away_neighbors:
+            for distance, that_region in away_neighbors:
                 if distance <= max_distance:
-                    near_neighbors.append((distance, that_label))
+                    near_neighbors.append((distance, that_region))
                 else:
-                    new_away_neighbors.append((distance, that_label))
+                    new_away_neighbors.append((distance, that_region))
             away_neighbors = new_away_neighbors
             # if there are enough near neighbors, this region is done
             if len(near_neighbors) >= k:
                 break
-        all_nearest_neighbors[this_label] = [
-            that_label for _, that_region in sorted(near_neighbors)[:k]
+        all_nearest_neighbors[this_region.label] = [
+            that_region.label for _, that_region in sorted(near_neighbors)[:k]
         ]
-        result = all_nearest_neighbors[this_label]
+        result = all_nearest_neighbors[this_region.label]
         assert len(result) == len(set(result))
     # return the list of nearest neighbors
     return all_nearest_neighbors
