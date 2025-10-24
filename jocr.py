@@ -9,7 +9,7 @@ from random import Random
 import numpy as np
 from PIL import Image
 from imageio.v3 import imread
-from skimage.draw import rectangle_perimeter
+from skimage.draw import line, rectangle_perimeter
 from skimage.color import rgb2gray
 from skimage.measure import label as skimage_label, regionprops
 from skimage.morphology import flood
@@ -113,7 +113,14 @@ def hash_grid_radius_offsets(max_radius):
         yield radius, radius_keys
 
 
-def k_nearest_neighbors(regions, k, grid_size):
+def centroid_crosses_border(centroid1, centroid2, no_mans_coords):
+    return any(
+        (coord in no_mans_coords) for coord
+        in zip(*line(*(round(x) for x in (*centroid1, *centroid2))))
+    )
+
+
+def k_nearest_neighbors(regions, k, grid_size, no_mans_land):
     """Find the k nearest neighbors for each region.
 
     This implementation of kNN uses a hash grid to avoid unnecessary distance
@@ -139,15 +146,17 @@ def k_nearest_neighbors(regions, k, grid_size):
     added later.
     """
     # initialize the hash grid by putting each region in the appropriate grid cell
+    no_mans_coords = set(zip(*np.nonzero(no_mans_land)))
     keys = []
     hash_grid = defaultdict(list)
+    all_nearest_neighbors = {}
     for region in regions:
         key = (region.centroid[0] // grid_size, region.centroid[1] // grid_size)
         keys.append(key)
         hash_grid[key].append(region)
+        all_nearest_neighbors[region.label] = []
     # initialize result variables
     distance_cache = {}
-    all_nearest_neighbors = {}
     # loop over each region to look for its nearest neighbors
     for this_key, this_region in zip(keys, regions):
         this_centroid = this_region.centroid
@@ -176,10 +185,13 @@ def k_nearest_neighbors(regions, k, grid_size):
             # add regions that were too far away but are now eligible
             new_away_neighbors = []
             for distance, that_region in away_neighbors:
-                if distance <= max_distance:
-                    near_neighbors.append((distance, that_region))
-                else:
+                if distance > max_distance:
                     new_away_neighbors.append((distance, that_region))
+                    continue
+                # check if connecting the centroids will cross no man's land
+                #if not centroid_crosses_border(this_region.centroid, that_region.centroid, no_mans_land):
+                if not centroid_crosses_border(this_region.centroid, that_region.centroid, no_mans_coords):
+                    near_neighbors.append((distance, that_region))
             away_neighbors = new_away_neighbors
             # if there are enough near neighbors, this region is done
             if len(near_neighbors) >= k:
@@ -288,10 +300,13 @@ def pipeline(path, k):
     visualize_regions(labels, border_regions)
     visualize_regions(labels, character_regions)
     # find nearest neighbors and visualize
+    border_mask = np.zeros(labels.shape).astype(bool)
+    border_mask[np.isin(labels, list(border_regions.keys()))] = True
     nearest_neighbors = k_nearest_neighbors(
         character_regions.values(),
         k,
         min(array.shape[0], array.shape[1]) // 20,
+        border_mask,
     )
     components = find_connected_components(nearest_neighbors)
     visualize_components(character_regions, labels, components)
