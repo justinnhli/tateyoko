@@ -181,14 +181,14 @@ def k_nearest_neighbors(regions, k, grid_size):
                 else:
                     new_away_neighbors.append((distance, that_label))
             away_neighbors = new_away_neighbors
-            # if there are enough near neighbors, store it and move on
+            # if there are enough near neighbors, this region is done
             if len(near_neighbors) >= k:
-                all_nearest_neighbors[this_region.label] = [
-                    pair[1] for pair in sorted(near_neighbors)[:k]
-                ]
-                result = all_nearest_neighbors[this_region.label]
-                assert len(result) == len(set(result))
                 break
+        all_nearest_neighbors[this_label] = [
+            that_label for _, that_region in sorted(near_neighbors)[:k]
+        ]
+        result = all_nearest_neighbors[this_label]
+        assert len(result) == len(set(result))
     # return the list of nearest neighbors
     return all_nearest_neighbors
 
