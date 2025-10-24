@@ -204,6 +204,7 @@ def k_nearest_neighbors(regions, k, grid_size, no_mans_land):
     return all_nearest_neighbors
 
 
+
 def find(union_find, i):
     path = set()
     rep = i
@@ -311,7 +312,7 @@ def pipeline(path, k):
 def main():
     arg_parser = ArgumentParser()
     arg_parser.add_argument('images', metavar='image', type=Path, nargs='+')
-    arg_parser.add_argument('-k', default=3)
+    arg_parser.add_argument('-k', default=3, type=int)
     args = arg_parser.parse_args()
     args.images = sorted(set(path.expanduser().resolve() for path in args.images))
     for image_path in args.images:
