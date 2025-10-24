@@ -288,14 +288,11 @@ def pipeline(path, k):
     # convert to black-and-white
     array = (rgb2gray(array) * 255 > 127) * np.ones(array.shape[:2])
     array = (array * 255).astype(np.uint8)
-    save_image(array)
     # crop to just the page
     array = crop(array)
     save_image(array)
-    # invert the image colors
-    array = invert(array)
-    save_image(array)
     # separate characters from borders
+    array = invert(array)
     labels, character_regions, border_regions = identify_characters_borders(array)
     visualize_regions(labels, border_regions)
     visualize_regions(labels, character_regions)
