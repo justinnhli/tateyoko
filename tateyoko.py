@@ -164,14 +164,16 @@ def k_nearest_neighbors_hash(regions, k, grid_size, no_mans_land):
         all_nearest_neighbors[region.label] = []
     # initialize result variables
     distance_cache = {}
+    max_radius = 3
+    max_distance = max_radius * max_radius * grid_size * grid_size
     # loop over each region to look for its nearest neighbors
     for this_key, this_region in zip(keys, regions):
         this_centroid = this_region.centroid
         away_neighbors = []
         near_neighbors = []
-        for radius, offsets in hash_grid_radius_offsets(len(hash_grid)):
+        for radius, offsets in hash_grid_radius_offsets(max_radius):
             # pre-calculate the maximum distance we will consider, accounting for grid squareness
-            max_distance = radius * radius * grid_size * grid_size
+            radius_distance = radius * radius * grid_size * grid_size
             # loop over the grid cells in the larger radius
             for offset in offsets:
                 that_key = (this_key[0] + offset[0], this_key[1] + offset[1])
@@ -188,11 +190,12 @@ def k_nearest_neighbors_hash(regions, k, grid_size, no_mans_land):
                         dy = this_centroid[1] - that_centroid[1]
                         distance_cache[distance_key] = dx * dx + dy * dy
                     distance = distance_cache[distance_key]
-                    away_neighbors.append((distance, that_region))
+                    if distance < max_distance:
+                        away_neighbors.append((distance, that_region))
             # add regions that were too far away but are now eligible
             new_away_neighbors = []
             for distance, that_region in away_neighbors:
-                if distance > max_distance:
+                if distance > radius_distance:
                     new_away_neighbors.append((distance, that_region))
                     continue
                 # check if connecting the centroids will cross no man's land
