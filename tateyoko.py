@@ -100,6 +100,7 @@ def visualize_regions(labels, regions):
     array = np.zeros(labels.shape)
     array[np.isin(labels, list(regions.keys()))] = 1
     save_image((array * 255).astype(np.uint8))
+    return array
 
 
 def hash_grid_radius_offsets(max_radius):
@@ -310,6 +311,7 @@ def visualize_components(regions, labels, components):
         )
         array[perimeter_mask] = rgb
     save_image(array)
+    return array
 
 
 def pipeline(path, k):
