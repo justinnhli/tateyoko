@@ -126,7 +126,7 @@ def centroid_crosses_border(centroid1, centroid2, no_mans_coords):
     )
 
 
-def k_nearest_neighbors_hash(regions, k, grid_size, no_mans_land):
+def k_nearest_neighbors_hash(regions, k, grid_size, no_mans_coords):
     """Find the k nearest neighbors for each region.
 
     This implementation of kNN uses a hash grid to avoid unnecessary distance
@@ -152,7 +152,6 @@ def k_nearest_neighbors_hash(regions, k, grid_size, no_mans_land):
     added later.
     """
     # initialize the hash grid by putting each region in the appropriate grid cell
-    no_mans_coords = set(zip(*np.nonzero(no_mans_land)))
     keys = []
     hash_grid = defaultdict(list)
     all_nearest_neighbors = {} # type: dict[int, list[int]]
@@ -337,11 +336,12 @@ def pipeline(path, k):
     # find nearest neighbors and visualize
     border_mask = np.zeros(labels.shape).astype(bool)
     border_mask[np.isin(labels, list(border_regions.keys()))] = True
+    border_coords = set(zip(*np.nonzero(border_mask)))
     nearest_neighbors = k_nearest_neighbors_hash(
         character_regions.values(),
         k,
         min(array.shape[0], array.shape[1]) // 20,
-        border_mask,
+        border_coords,
     )
     check_time(f'found the k nearest neighbors')
     components = find_connected_components(nearest_neighbors)
