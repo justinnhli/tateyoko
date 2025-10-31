@@ -254,31 +254,33 @@ def find_connected_components(neighbors):
 
 
 def visualize_components(regions, labels, components):
+    # initialize the image to all black
     array = np.zeros((*labels.shape, 3)).astype(np.uint8)
+    # for each component
     for component in components:
+        # randomly pick a color for this component
         rgb = (
             RNG.randrange(128, 255),
             RNG.randrange(128, 255),
             RNG.randrange(128, 255),
         )
-        array_min_row, array_min_col = array.shape[:2]
-        array_max_row = 0
-        array_max_col = 0
-        for region_index in component:
-            region = regions[region_index]
-            array[labels == region.label] = np.repeat(
-                [rgb],
-                array[labels == region.label].shape[0],
-                axis=0,
-            )
-            min_row, min_col, max_row, max_col = region.bbox
-            array_min_row = min(min_row, array_min_row)
-            array_min_col = min(min_col, array_min_col)
-            array_max_row = max(max_row, array_max_row)
-            array_max_col = max(max_col, array_max_col)
+        # color the regions
+        region_mask = np.isin(
+            labels,
+            [regions[region_index].label for region_index in component],
+        )
+        array = np.ma.masked_array(
+            array,
+            np.repeat(region_mask, array.shape[2]).reshape(array.shape),
+            fill_value=rgb,
+        ).filled()
+        # color the bounding box
+        min_rows, min_cols, max_rows, max_cols = zip(*(
+            regions[region_index].bbox for region_index in component
+        ))
         perimeter_mask = rectangle_perimeter(
-            start=(array_min_row, array_min_col),
-            end=(array_max_row, array_max_col),
+            start=(min(min_rows), min(min_cols)),
+            end=(max(max_rows), max(max_cols)),
             shape=array.shape,
             clip=True,
         )
