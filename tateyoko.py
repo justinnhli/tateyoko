@@ -48,7 +48,6 @@ def save_image(array):
     image = Image.fromarray(array)
     filename = f'{STATE["filepath"].stem}-step{STATE["step"]:02d}.png'
     image.save(filename)
-    check_time(f'saved {filename}')
     STATE['step'] += 1
 
 
@@ -319,18 +318,22 @@ def pipeline(path, k):
     STATE['filepath'] = path
     # read the image
     array = imread(path)
+    check_time(f'read in the image')
     save_image(array)
     # convert to black-and-white
     array = (rgb2gray(array) * 255 > 127) * np.ones(array.shape[:2])
     array = (array * 255).astype(np.uint8)
     # crop to just the page
     array = crop(array)
+    check_time(f'cropped the image')
     save_image(array)
     # separate characters from borders
     array = invert(array)
     labels, character_regions, border_regions = identify_characters_borders(array)
+    check_time(f'separated characters from borders')
     visualize_regions(labels, border_regions)
     visualize_regions(labels, character_regions)
+    check_time(f'visualized characters and borders')
     # find nearest neighbors and visualize
     border_mask = np.zeros(labels.shape).astype(bool)
     border_mask[np.isin(labels, list(border_regions.keys()))] = True
@@ -340,8 +343,11 @@ def pipeline(path, k):
         min(array.shape[0], array.shape[1]) // 20,
         border_mask,
     )
+    check_time(f'found the k nearest neighbors')
     components = find_connected_components(nearest_neighbors)
+    check_time(f'found the connected components')
     visualize_components(character_regions, labels, components)
+    check_time(f'visualized connected components')
 
 
 def main():
