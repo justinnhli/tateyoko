@@ -127,7 +127,7 @@ def centroid_crosses_border(centroid1, centroid2, no_mans_coords):
     )
 
 
-def k_nearest_neighbors(regions, k, grid_size, no_mans_land):
+def k_nearest_neighbors_hash(regions, k, grid_size, no_mans_land):
     """Find the k nearest neighbors for each region.
 
     This implementation of kNN uses a hash grid to avoid unnecessary distance
@@ -208,6 +208,29 @@ def k_nearest_neighbors(regions, k, grid_size, no_mans_land):
         result = all_nearest_neighbors[this_region.label]
         assert len(result) == len(set(result))
     # return the list of nearest neighbors
+    return all_nearest_neighbors
+
+
+def k_nearest_neighbors_naive(regions, k, _, no_mans_land):
+    no_mans_coords = set(zip(*np.nonzero(no_mans_land)))
+    regions_dict = {region.label: region for region in regions}
+    region_labels = sorted(regions_dict.keys())
+    all_nearest_neighbors = {}
+    for i, region_label1 in enumerate(region_labels):
+        region1 = regions_dict[region_label1]
+        centroid1 = region1.centroid
+        neighbors = []
+        for region_label2 in region_labels[i+1:]:
+            region2 = regions_dict[region_label2]
+            centroid2 = region2.centroid
+            dx = centroid1[0] - centroid2[0]
+            dy = centroid1[1] - centroid2[1]
+            distance = dx * dx + dy * dy
+            if not centroid_crosses_border(centroid1, centroid2, no_mans_coords):
+                neighbors.append((distance, region2))
+        all_nearest_neighbors[region_label1] = [
+            region2.label for _, region2 in sorted(neighbors)[:k]
+        ]
     return all_nearest_neighbors
 
 
@@ -308,7 +331,7 @@ def pipeline(path, k):
     # find nearest neighbors and visualize
     border_mask = np.zeros(labels.shape).astype(bool)
     border_mask[np.isin(labels, list(border_regions.keys()))] = True
-    nearest_neighbors = k_nearest_neighbors(
+    nearest_neighbors = k_nearest_neighbors_hash(
         character_regions.values(),
         k,
         min(array.shape[0], array.shape[1]) // 20,
