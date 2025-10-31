@@ -103,6 +103,46 @@ def visualize_regions(labels, regions):
     return array
 
 
+def sum_dimension(array, dimension):
+    """Sum an array along the rows or the columns."""
+    if dimension == 'row':
+        return np.sum(array, axis=1)
+    elif dimension == 'col':
+        return np.sum(array, axis=0)
+    else:
+        raise ValueError(' '.join([
+            'dimension should be either "row" or "col"',
+            f'but got "{dimension}"',
+        ]))
+
+
+def visualize_non_characters(image, rows, cols):
+    # create an empty (all black) image
+    array = np.zeros(image.shape)
+    # make the rows white
+    row_mask = np.isin(np.arange(array.shape[0]), list(rows))
+    array = np.ma.masked_array(
+        array,
+        np.repeat(row_mask, array.shape[1]).reshape(array.shape),
+        fill_value=1,
+    ).filled()
+    # make the columns white
+    col_mask = np.isin(np.arange(array.shape[1]), list(cols))
+    array = np.ma.masked_array(
+        array,
+        (
+            np.repeat(col_mask, array.shape[0])
+            .reshape(array.transpose().shape)
+            .transpose()
+        ),
+        fill_value=1,
+    ).filled()
+    # save the image
+    save_image((array * 255).astype(np.uint8))
+    return array
+
+
+
 def hash_grid_radius_offsets(max_radius):
     """Generate the offsets for each radius away."""
     yield 0, [(0, 0)]
@@ -333,8 +373,15 @@ def pipeline(path, k):
     labels, character_regions, border_regions = identify_characters_borders(array)
     check_time(f'separated characters from borders')
     visualize_regions(labels, border_regions)
-    visualize_regions(labels, character_regions)
+    character_image = visualize_regions(labels, character_regions)
     check_time(f'visualized characters and borders')
+    # find vertical and horizontal lines with no characters
+    row_pixel_counts = sum_dimension(character_image, 'row')
+    non_character_rows = set(np.nonzero(row_pixel_counts == 0)[0])
+    col_pixel_counts = sum_dimension(character_image, 'col')
+    non_character_cols = set(np.nonzero(col_pixel_counts == 0)[0])
+    visualize_non_characters(character_image, non_character_rows, non_character_cols)
+    check_time(f'visualized non-character gaps')
     # find nearest neighbors and visualize
     border_mask = np.zeros(labels.shape).astype(bool)
     border_mask[np.isin(labels, list(border_regions.keys()))] = True
