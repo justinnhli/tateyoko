@@ -265,17 +265,97 @@ def union(union_find, i, j):
     return rep
 
 
-def find_connected_components(neighbors):
-    # use union-find to identify connected components
-    union_find = {label: label for label in neighbors}
+def find_connected_components(neighbors, regions, no_mans_land):
+    # neighbors is dictionary containing each k's nearest neighbor
+    # regions is a dictionary containing regional data (including centeroids)
+    # no_mans_land is a boolean numpy array where True = border pixel
+    """Find connected components while respecting border constraints."""
+
+    # convert border mask to coordinate set 
+    no_mans_coords = set(zip(*np.nonzero(no_mans_land))) # * unpacks tuple and zip pairs them while set makes lookups O(1)
+    regions_dict = regions
+    crossing_cache = {} # stores results of border-crossing checks to avoid recalculating same pairs 
+    
+   # helper function that accesses all the variables from outer function  
+    def check_crossing(label1, label2):
+        key = tuple(sorted([label1, label2])) # cache key 
+        if key not in crossing_cache: # check whether we have already computed this 
+            region1 = regions_dict[label1]
+            region2 = regions_dict[label2]
+            crossing_cache[key] = centroid_crosses_border( #c ompute the cache and border-crossing check 
+                region1.centroid, region2.centroid, no_mans_coords
+            )
+        return crossing_cache[key] # return True or False for border crossing 
+    
+    union_find = {label: label for label in neighbors} # intialize union-fund so that each region starts as its own component -> points to itself
+    
+    # create sorted neighbor pairs by distance
+    neighbor_pairs = [] # populates with (distance, label1, label2)
+    # loop through every region and its neighbor
     for label, nearest_neighbors in neighbors.items():
+        # get region object for distance calculation
+        region1 = regions_dict[label]
+        # loop through each neighbor of this region 
         for neighbor in nearest_neighbors:
+            # get region object for this neighbor
+            region2 = regions_dict[neighbor]
+            # calculate the difference between x and y coordinates 
+            dx = region1.centroid[0] - region2.centroid[0]
+            dy = region1.centroid[1] - region2.centroid[1]
+            # calculate sqrd euclidean distance
+            distance = dx * dx + dy * dy
+            # store this neighbor relationship with its distance
+            neighbor_pairs.append((distance, label, neighbor))
+    
+    # process closest pairs first
+    neighbor_pairs.sort()
+    # loop through neighbor pairs in order of increasing distance
+    for _, label, neighbor in neighbor_pairs:
+        # find the root of each component  
+        rep_label = find(union_find, label)
+        rep_neighbor = find(union_find, neighbor)
+        # skip if already in the same component (because if they already have the same root they are grouped together)
+        if rep_label == rep_neighbor:
+            continue
+        # use set to collect component members to avoid duplicates 
+        label_component = set()
+        neighbor_component = set()
+        # loop through all regions in the entire dataset to find out which one belongs to our two components  
+        for other_label in neighbors:
+            # find this region's representative 
+            other_rep = find(union_find, other_label)
+            #if this region belongs to the label's component, add it to that set 
+            if other_rep == rep_label:
+                label_component.add(other_label)
+            # if this region belongs to the neighbor's component, add it to that set 
+            elif other_rep == rep_neighbor:
+                neighbor_component.add(other_label)
+        
+        # assume we can merge the components and set to false if we find any border crossings
+        can_connect = True
+        # loop through every member of first component 
+        for member1 in label_component:
+            # loop through every member of second component 
+            for member2 in neighbor_component:
+                # check if connecting these two regions crosses a border
+                if check_crossing(member1, member2):
+                    # if any pair crosses a border, we can't merge these components 
+                    can_connect = False
+                    break
+            if not can_connect:
+                break
+        # if we checked all pairs and none crossed borders, merge the two componentsso the two components now share the same representative
+        if can_connect:
             union(union_find, label, neighbor)
-    # extract out the connected components
+    # create dictiionary to collect final components 
     components = defaultdict(set)
+    # loop through every region one final time to collect all regions into their final components 
     for label in neighbors:
+        # find this region's final representative
         rep = find(union_find, label)
+        # add this region to its component's set 
         components[rep].add(label)
+    #return the component sets 
     return list(components.values())
 
 
@@ -331,6 +411,11 @@ def pipeline(path, k):
     labels, character_regions, border_regions = identify_characters_borders(array)
     visualize_regions(labels, border_regions)
     visualize_regions(labels, character_regions)
+
+
+# insert here
+
+
     # find nearest neighbors and visualize
     border_mask = np.zeros(labels.shape).astype(bool)
     border_mask[np.isin(labels, list(border_regions.keys()))] = True
@@ -340,7 +425,12 @@ def pipeline(path, k):
         min(array.shape[0], array.shape[1]) // 20,
         border_mask,
     )
-    components = find_connected_components(nearest_neighbors)
+    # pass the additional parameters needed for border checking
+    components = find_connected_components(
+        nearest_neighbors,
+        character_regions,  # pass regions dictionary
+        border_mask  # pass the border mask
+    )
     visualize_components(character_regions, labels, components)
 
 
