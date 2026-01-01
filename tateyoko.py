@@ -124,8 +124,15 @@ def find_peaks_and_valleys(signal_data, min_distance=10):
     return peaks, valleys
 
 
-def refine_gaps_from_peaks_and_valleys(row_pixel_counts, col_pixel_counts, peak_rows, valley_rows, peak_cols, valley_cols,
-                                        white_threshold=0.3):
+def refine_gaps_from_peaks_and_valleys(
+        row_pixel_counts,
+        col_pixel_counts,
+        peak_rows,
+        valley_rows,
+        peak_cols,
+        valley_cols,
+        white_threshold=0.3,
+):
     """ Refine peaks/valleys to find ACTUAL gaps (true separations between text).
         - for each detected valley, check if it's actually a gap using a threshold.
         - only keep valleys where white_ratio <= white_threshold.
