@@ -43,10 +43,11 @@ def check_time(message=''):
     STATE['time'] = curr_time
 
 
-def save_image(array):
+def save_image(array, filename=None):
     """Save the array as an image, with an auto-incremented filename."""
     image = Image.fromarray(array)
-    filename = f'{STATE["filepath"].stem}-step{STATE["step"]:02d}.png'
+    if filename is None:
+        filename = f'{STATE["filepath"].stem}-step{STATE["step"]:02d}.png'
     image.save(filename)
     STATE['step'] += 1
 
