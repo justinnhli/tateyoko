@@ -388,7 +388,7 @@ def visualize_components(regions, labels, components):
     return array
 
 
-def pipeline(path, k):
+def pipeline(path, args):
     reset_state()
     STATE['filepath'] = path
     # read the image
@@ -427,7 +427,7 @@ def pipeline(path, k):
     border_coords = set(zip(*np.nonzero(border_mask)))
     nearest_neighbors = k_nearest_neighbors_hash(
         character_regions.values(),
-        k,
+        args.k,
         min(array.shape[0], array.shape[1]) // 20,
         border_coords,
     )
@@ -445,7 +445,7 @@ def main():
     args = arg_parser.parse_args()
     args.images = sorted(set(path.expanduser().resolve() for path in args.images))
     for image_path in args.images:
-        pipeline(image_path, k=args.k)
+        pipeline(image_path, args)
 
 
 if __name__ == '__main__':
