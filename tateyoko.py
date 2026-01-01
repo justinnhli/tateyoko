@@ -96,12 +96,45 @@ def identify_characters_borders(array):
     return labels, character_regions, border_regions
 
 
-def visualize_regions(labels, regions):
-    """Create a visualization of different region components."""
-    array = np.zeros(labels.shape)
-    array[np.isin(labels, list(regions.keys()))] = 1
-    save_image((array * 255).astype(np.uint8))
-    return array
+def visualize(*mask_colors, background=None):
+    """Visualize masks on a background.
+
+    Colors are always integer RGB tuples.
+
+    Parameters:
+        mask_colors (list[array, color]): A list of masks and their colors.
+        background (array | color | None): The background image to draw on.
+    """
+    # create the background
+    if isinstance(background, np.ndarray):
+        # if it's an image, use it
+        result = background.astype(np.uint8)
+    else:
+        if background is None:
+            background = (0, 0, 0)
+        # if not, create it by first figuring out the size of the masks
+        height = max(mask.shape[0] for mask, _ in mask_colors)
+        width = max(mask.shape[1] for mask, _ in mask_colors)
+        # figure out the color as a tuple of integers
+        result = (
+            np.repeat(
+                background,
+                height * width,
+            ).reshape(
+                (height, width, 3),
+                order='F',
+            ).astype(np.uint8)
+        )
+    # apply each mask
+    for mask, color in mask_colors:
+        result = np.ma.masked_array(
+            result,
+            np.repeat(mask, result.shape[2]).reshape(result.shape),
+            fill_value=color,
+        ).filled()
+    # save the image
+    save_image(result)
+    return result
 
 
 def sum_dimension(array, dimension):
@@ -372,9 +405,14 @@ def pipeline(path, k):
     # separate characters from borders
     array = invert(array)
     labels, character_regions, border_regions = identify_characters_borders(array)
-    check_time('separated characters from borders')
-    visualize_regions(labels, border_regions)
-    character_image = visualize_regions(labels, character_regions)
+    character_mask = np.isin(labels, list(character_regions.keys()))
+    visualize(
+        (
+            np.isin(labels, list(border_regions.keys())),
+            (255, 255, 255),
+        ),
+        (character_mask, (0, 255, 0)),
+    )
     check_time('visualized characters and borders')
     # find vertical and horizontal lines with no characters
     row_pixel_counts = sum_dimension(character_image, 'row')
