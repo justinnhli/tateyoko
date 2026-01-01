@@ -150,31 +150,36 @@ def sum_dimension(array, dimension):
         ]))
 
 
-def visualize_non_characters(image, rows, cols):
-    # create an empty (all black) image
-    array = np.zeros(image.shape)
-    # make the rows white
-    row_mask = np.isin(np.arange(array.shape[0]), list(rows))
-    array = np.ma.masked_array(
-        array,
-        np.repeat(row_mask, array.shape[1]).reshape(array.shape),
-        fill_value=1,
-    ).filled()
-    # make the columns white
-    col_mask = np.isin(np.arange(array.shape[1]), list(cols))
-    array = np.ma.masked_array(
-        array,
-        (
-            np.repeat(col_mask, array.shape[0])
-            .reshape(array.transpose().shape)
-            .transpose()
-        ),
-        fill_value=1,
-    ).filled()
-    # save the image
-    save_image((array * 255).astype(np.uint8))
-    return array
+def find_basins(array, dimension, threshold):
+    # count the pixels along the dimension
+    pixel_counts = sum_dimension(array, dimension)
+    character_ratios = pixel_counts / len(pixel_counts)
+    valleys = np.nonzero(character_ratios < threshold)[0]
+    basins = [] # type: list[tuple[int, int]]
+    first_value = None
+    prev_value = None
+    # determine the start and end of basins
+    for value in valleys:
+        if first_value is None:
+            first_value = value
+        elif value > prev_value + 1:
+            basins.append((first_value, prev_value))
+            first_value = None
+        prev_value = value
+    basins.append((first_value, value))
+    return basins
 
+
+def create_basins_mask(character_mask, row_basins, col_basins):
+    mask = np.zeros(character_mask.shape).astype(np.uint8)
+    for min_row, max_row in row_basins:
+        for min_col, max_col in col_basins:
+            mask[min_row:max_row, min_col:max_col] = 1
+            mask[min_row, :] = 1
+            mask[max_row, :] = 1
+            mask[:, min_col] = 1
+            mask[:, max_col] = 1
+    return mask
 
 
 def hash_grid_radius_offsets(max_radius):
@@ -414,12 +419,18 @@ def pipeline(path, args):
         (character_mask, (0, 255, 0)),
     )
     check_time('visualized characters and borders')
-    # find vertical and horizontal lines with no characters
-    row_pixel_counts = sum_dimension(character_image, 'row')
-    non_character_rows = set(np.nonzero(row_pixel_counts == 0)[0])
-    col_pixel_counts = sum_dimension(character_image, 'col')
-    non_character_cols = set(np.nonzero(col_pixel_counts == 0)[0])
-    visualize_non_characters(character_image, non_character_rows, non_character_cols)
+    # find rows and columns where there are no characters
+    # the character mask has a 1 where there are characters and 0 where there aren't
+    row_basins = find_basins(character_mask, 'row', args.border_ratio_threshold)
+    col_basins = find_basins(character_mask, 'col', args.border_ratio_threshold)
+    visualize(
+        (np.isin(labels, list(border_regions.keys())), (255, 255, 255)),
+        (character_mask, (0, 255, 0)),
+        (
+            create_basins_mask(character_mask, row_basins, col_basins),
+            (255, 0, 0),
+        ),
+    )
     check_time('visualized non-character gaps')
     # find nearest neighbors and visualize
     border_mask = np.zeros(labels.shape).astype(bool)
@@ -442,6 +453,7 @@ def main():
     arg_parser = ArgumentParser()
     arg_parser.add_argument('images', metavar='image', type=Path, nargs='+')
     arg_parser.add_argument('-k', default=3, type=int)
+    arg_parser.add_argument('--border-ratio-threshold', default=0.05, type=float)
     args = arg_parser.parse_args()
     args.images = sorted(set(path.expanduser().resolve() for path in args.images))
     for image_path in args.images:
