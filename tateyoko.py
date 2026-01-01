@@ -360,29 +360,29 @@ def pipeline(path, k):
     STATE['filepath'] = path
     # read the image
     array = imread(path)
-    check_time(f'read in the image')
+    check_time('read in the image')
     save_image(array)
     # convert to black-and-white
     array = (rgb2gray(array) * 255 > 127) * np.ones(array.shape[:2])
     array = (array * 255).astype(np.uint8)
     # crop to just the page
     array = crop(array)
-    check_time(f'cropped the image')
+    check_time('cropped the image')
     save_image(array)
     # separate characters from borders
     array = invert(array)
     labels, character_regions, border_regions = identify_characters_borders(array)
-    check_time(f'separated characters from borders')
+    check_time('separated characters from borders')
     visualize_regions(labels, border_regions)
     character_image = visualize_regions(labels, character_regions)
-    check_time(f'visualized characters and borders')
+    check_time('visualized characters and borders')
     # find vertical and horizontal lines with no characters
     row_pixel_counts = sum_dimension(character_image, 'row')
     non_character_rows = set(np.nonzero(row_pixel_counts == 0)[0])
     col_pixel_counts = sum_dimension(character_image, 'col')
     non_character_cols = set(np.nonzero(col_pixel_counts == 0)[0])
     visualize_non_characters(character_image, non_character_rows, non_character_cols)
-    check_time(f'visualized non-character gaps')
+    check_time('visualized non-character gaps')
     # find nearest neighbors and visualize
     border_mask = np.zeros(labels.shape).astype(bool)
     border_mask[np.isin(labels, list(border_regions.keys()))] = True
@@ -393,11 +393,11 @@ def pipeline(path, k):
         min(array.shape[0], array.shape[1]) // 20,
         border_coords,
     )
-    check_time(f'found the k nearest neighbors')
+    check_time('found the k nearest neighbors')
     components = find_connected_components(nearest_neighbors)
-    check_time(f'found the connected components')
+    check_time('found the connected components')
     visualize_components(character_regions, labels, components)
-    check_time(f'visualized connected components')
+    check_time('visualized connected components')
 
 
 def main():
