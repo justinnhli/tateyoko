@@ -1,0 +1,76 @@
+<!DOCTYPE HTML>
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+    <title>Better MF Markdown</title>
+    <style>
+        body {margin:auto auto; width:80ex; max-width:95%;}
+        blockquote {border-left:1ex solid #E0E0E0; margin:0; padding:0 3ex;}
+        img {display:block; margin:auto auto; max-width:100%;}
+        ol {list-style-type:decimal;}
+        ol ol {list-style-type:lower-alpha;}
+        ol ol ol {list-style-type:lower-roman;}
+        table {border-collapse:collapse;}
+        table tr, table td {border:1px solid #000000; border-collapse:collapse;}
+        table tr, table th, table td {border:1px solid #000000; border-collapse:collapse;}
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.4.1/styles/github-gist.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.4.1/highlight.min.js"></script>
+    <script>hljs.initHighlightingOnLoad();</script>
+</head>
+<body>
+<p>This document tries to illustrate my thought process as I work through student code for a research
+project. Since I am familiar with the broader goals of the project (and know roughly what the code
+is trying to do), my approach is to work bottom up. I first do the mechanical tasks of simplifying
+and refactoring the code, which also familiarizes me with how the code works and makes the code more
+understandable. These more software-engineering-y changes can be found in the commits leading up to
+this one, and I will can talk through them in a synchronous meeting.</p>
+<p>Instead, this document is the second part of the process, where I sit back and consider the big
+picture of whether the code is approaching the problem in the right way, or if there is a more
+efficient/better way to get the right results. Just to summarize, the goal of the overall project is
+to improvement digitization accuracy for some 18th century Japanese texts, specifically to identify
+lines of text which can then be cropped out for OCR. The approach is to first use heuristics to
+identify characters, then in the current step, identify the gaps between characters. A working
+assumption is that there will be bigger and more consistent gaps between lines of text than between
+characters in the same line; these gaps can then be used to refine what we consider characters, and
+the process can iterate until both characters and boundaries are stable.</p>
+<p>To identify boundaries, we are looking at the proportion of character pixels in each row/column. The
+rows/columns where this number is low - the valleys - are then candidates for boundaries. Much of
+the work of identifying these valleys (or really, inverse &quot;peaks&quot;) is done by
+<code>scipy.signal.find_peaks</code>, which has documentation at:</p>
+<p><a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html">https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html</a></p>
+<p>We call the function with:</p>
+<pre><code class="language-python">find_peaks(
+    -pixel_counts,
+    distance=min(array.shape[0], array.shape[1]) // 50,
+)
+</code></pre>
+<p>The documentation says that <code>find_peaks()</code> simply finds peaks by looking at whether <code>signal[i]</code> is
+greater than both <code>signal[i-1]</code> and <code>signal[i+1]</code>. One implication of this algorithm is that the
+peaks are necessarily solitary: it would not count as a peak if <code>signal[i-1] == signal[i] == signal[i+1]</code> (although there is a <code>plateau_size</code> parameter that could deal with this). Additionally,
+the <code>distance</code> parameter requires the results to be separated by that value, which works by removing
+shorter peaks first. This result is further filtered to remove peaks that have more than 30% of the
+row/column be characters, although empirically this does not drastically change the number of peaks.
+The visualization corroborates this understanding: the highlighted rows and columns are all only a
+single-pixel wide, separated by some distance.</p>
+<p>We can think about the same algorithm graphically by looking at the plot of pixel ratios, keeping in
+mind that because we negate the pixel counts, the &quot;peaks&quot; are actually valleys. So <code>find_peaks()</code>
+would return the index of the deepest part of each valley (abiding by the <code>distance</code> constraint),
+and we then only return the valleys that are deeper than 0.3. This visual understanding of the
+algorithm makes obvious several places where it's weird:</p>
+<ul>
+<li>
+<p>The y-axis suggests that the vast majority of rows/columns have less than 30% character pixels, so
+the filter is not doing much. The bottom of most valleys have less than 5% character pixels,
+although ideally we may want to dynamically determine what this threshold should be.</p>
+</li>
+<li>
+<p>Keeping in mind that the next step is to broaden the boundaries</p>
+</li>
+</ul>
+<ul>
+<li>presumably to the same 30%
+threshold - this similarly suggests the threshold is too high. Unfortunately, the plot also shows
+that there is no</li>
+</ul>
+</body>
+</html>
