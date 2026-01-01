@@ -14,6 +14,7 @@ from skimage.color import rgb2gray
 from skimage.measure import label as skimage_label, regionprops
 from skimage.morphology import flood
 from skimage.util import invert
+from scipy import signal
 
 RNG = Random(8675309)
 
@@ -114,6 +115,35 @@ def sum_dimension(array, dimension):
             'dimension should be either "row" or "col"',
             f'but got "{dimension}"',
         ]))
+
+
+def find_peaks_and_valleys(signal_data, min_distance=10):
+    """Find peaks (high values) and valleys (low values) in the signal."""
+    peaks, peak_properties = signal.find_peaks(signal_data, distance=min_distance)
+    valleys, valley_properties = signal.find_peaks(-signal_data, distance=min_distance)
+    return peaks, valleys
+
+
+def refine_gaps_from_peaks_and_valleys(row_pixel_counts, col_pixel_counts, peak_rows, valley_rows, peak_cols, valley_cols,
+                                        white_threshold=0.3):
+    """ Refine peaks/valleys to find ACTUAL gaps (true separations between text).
+        - for each detected valley, check if it's actually a gap using a threshold.
+        - only keep valleys where white_ratio <= white_threshold.
+    """
+    row_white_ratios = row_pixel_counts / len(col_pixel_counts)
+    col_white_ratios = col_pixel_counts / len(row_pixel_counts)
+    
+    refined_valley_rows = set()
+    for row_idx in valley_rows:
+        if row_white_ratios[row_idx] <= white_threshold:
+            refined_valley_rows.add(row_idx)
+    
+    refined_valley_cols = set()
+    for col_idx in valley_cols:
+        if col_white_ratios[col_idx] <= white_threshold:
+            refined_valley_cols.add(col_idx)
+    
+    return refined_valley_rows, refined_valley_cols
 
 
 def visualize_non_characters(image, rows, cols):
@@ -375,13 +405,26 @@ def pipeline(path, k):
     visualize_regions(labels, border_regions)
     character_image = visualize_regions(labels, character_regions)
     check_time(f'visualized characters and borders')
-    # find vertical and horizontal lines with no characters
+    # sum white pixels along rows and columns
     row_pixel_counts = sum_dimension(character_image, 'row')
-    non_character_rows = set(np.nonzero(row_pixel_counts == 0)[0])
     col_pixel_counts = sum_dimension(character_image, 'col')
-    non_character_cols = set(np.nonzero(col_pixel_counts == 0)[0])
-    visualize_non_characters(character_image, non_character_rows, non_character_cols)
+    
+    # find peaks and valleys
+    min_distance = min(array.shape[0], array.shape[1]) // 50
+    peak_rows, valley_rows = find_peaks_and_valleys(row_pixel_counts, min_distance)
+    peak_cols, valley_cols = find_peaks_and_valleys(col_pixel_counts, min_distance)
+    check_time(f'found peaks and valleys')
+    
+    # refine valleys to find actual gaps
+    gap_rows, gap_cols = refine_gaps_from_peaks_and_valleys(
+        row_pixel_counts, col_pixel_counts,
+        peak_rows, valley_rows, peak_cols, valley_cols,
+        white_threshold=0.3
+    )
+    check_time(f'refined gaps from peaks and valleys')
+    visualize_non_characters(character_image, gap_rows, gap_cols)
     check_time(f'visualized non-character gaps')
+    return
     # find nearest neighbors and visualize
     border_mask = np.zeros(labels.shape).astype(bool)
     border_mask[np.isin(labels, list(border_regions.keys()))] = True
