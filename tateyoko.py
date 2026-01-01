@@ -389,10 +389,16 @@ def pipeline(path, k):
         # - for each detected valley, check if it's actually a gap using a threshold.
         # - only keep valleys where white_ratio <= white_threshold.
         white_ratios = pixel_counts / len(pixel_counts)
+        for ratio in white_ratios:
+            print(ratio)
+        print()
+        print(len(valleys))
         refined_valleys = set()
         for idx in valleys:
             if white_ratios[idx] <= 0.3:
                 refined_valleys.add(idx)
+        print(len(refined_valleys))
+        print()
         if dimension == 'row':
             gap_rows = refined_valleys
         else:
