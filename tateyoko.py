@@ -117,31 +117,6 @@ def sum_dimension(array, dimension):
         ]))
 
 
-def find_peaks_and_valleys(signal_data, min_distance=10):
-    """Find peaks (high values) and valleys (low values) in the signal."""
-    peaks, peak_properties = signal.find_peaks(signal_data, distance=min_distance)
-    valleys, valley_properties = signal.find_peaks(-signal_data, distance=min_distance)
-    return peaks, valleys
-
-
-def refine_gaps_from_peaks_and_valleys(
-        pixel_counts,
-        peaks,
-        valleys,
-        white_threshold=0.3,
-):
-    """ Refine peaks/valleys to find ACTUAL gaps (true separations between text).
-        - for each detected valley, check if it's actually a gap using a threshold.
-        - only keep valleys where white_ratio <= white_threshold.
-    """
-    white_ratios = pixel_counts / len(pixel_counts)
-    refined_valleys = set()
-    for idx in valleys:
-        if white_ratios[idx] <= white_threshold:
-            refined_valleys.add(idx)
-    return refined_valleys
-
-
 def visualize_non_characters(image, rows, cols):
     # create an empty (all black) image
     array = np.zeros(image.shape)
@@ -407,15 +382,21 @@ def pipeline(path, k):
     for dimension in ['row', 'col']:
         # sum white pixels along the dimension
         pixel_counts = sum_dimension(character_image, dimension)
-        # find peaks and valleys
+        # find valleys (low values) in the signal
         min_distance = min(array.shape[0], array.shape[1]) // 50
-        peaks, valleys = find_peaks_and_valleys(pixel_counts, min_distance)
+        valleys, _ = signal.find_peaks(-pixel_counts, distance=min_distance)
         # refine valleys to find actual gaps
-        valleys = refine_gaps_from_peaks_and_valleys(pixel_counts, peaks, valleys)
+        # - for each detected valley, check if it's actually a gap using a threshold.
+        # - only keep valleys where white_ratio <= white_threshold.
+        white_ratios = pixel_counts / len(pixel_counts)
+        refined_valleys = set()
+        for idx in valleys:
+            if white_ratios[idx] <= 0.3:
+                refined_valleys.add(idx)
         if dimension == 'row':
-            gap_rows = valleys
+            gap_rows = refined_valleys
         else:
-            gap_cols = valleys
+            gap_cols = refined_valleys
     check_time(f'refined gaps from peaks and valleys')
     visualize_non_characters(character_image, gap_rows, gap_cols)
     check_time(f'visualized non-character gaps')
