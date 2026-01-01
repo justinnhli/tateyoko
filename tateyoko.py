@@ -432,6 +432,7 @@ def pipeline(path, args):
         ),
     )
     check_time('visualized non-character gaps')
+    return # FIXME
     # find nearest neighbors and visualize
     border_mask = np.zeros(labels.shape).astype(bool)
     border_mask[np.isin(labels, list(border_regions.keys()))] = True
