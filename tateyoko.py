@@ -88,6 +88,7 @@ def identify_characters_borders(array):
             and height < max_dimension # height less than 1/20 of the image
             and (width / height) < 10 # width:height ratio less than 10
             and (height / width) < 10 # height:width ratio less than 10
+            # FIXME add density (within bounding box) requirement?
         )
         if is_character:
             character_regions[region.label] = region
