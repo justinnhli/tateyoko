@@ -266,6 +266,14 @@ class BorderNode:
     def max_col(self):
         return self.lower_right.col
 
+    @property
+    def width(self):
+        return self.lower_right.col - self.upper_left.col
+
+    @property
+    def height(self):
+        return self.lower_right.row - self.upper_left.row
+
 
 class BorderEdge:
 
