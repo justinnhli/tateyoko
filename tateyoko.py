@@ -94,6 +94,7 @@ def identify_characters_borders(array):
             # discard small image artifacts
             continue
         density = region.extent
+        num_holes = 1 - region.euler_number
         is_character = (
             True
             # no larger than a maximum dimension
@@ -104,6 +105,8 @@ def identify_characters_borders(array):
             and (height / width) < 10
             # more than 15% of pixels are characters
             and 0.15 < density < 0.90
+            # not contain too many holes
+            and (num_holes / region.area) < 0.015
         )
         if is_character:
             character_regions[region.label] = region
