@@ -573,6 +573,7 @@ def pipeline(path, args):
     array = invert(array)
     labels, character_regions, border_regions = identify_characters_borders(array)
     character_mask = np.isin(labels, list(character_regions.keys()))
+    border_mask = np.isin(labels, list(border_regions.keys()))
     visualize(
         (
             np.isin(labels, list(border_regions.keys())),
@@ -597,15 +598,20 @@ def pipeline(path, args):
         ),
     )
     check_time('visualized grid')
+    # shrink the edges to get the minimal border
+    for edge in edges:
+        edge.shrink(character_mask, border_mask)
     visualize(
         (np.isin(labels, list(border_regions.keys())), (255, 255, 255)),
         (character_mask, (0, 255, 0)),
         (
-            create_basins_mask(character_mask, row_basins, col_basins),
+            create_grid_edge_mask(character_mask, edges, style='filled'),
             (255, 0, 0),
         ),
     )
-    check_time('visualized non-character gaps')
+    check_time('visualized edge-minimized grid')
+
+
     return # FIXME
     # find nearest neighbors and visualize
     border_mask = np.zeros(labels.shape).astype(bool)
