@@ -188,8 +188,9 @@ def create_grid_node_mask(character_mask, edges):
 
 
 def create_grid_edge_mask(character_mask, edges, style='outline'):
+    assert style in ['outline', 'filled']
     mask = np.zeros(character_mask.shape).astype(np.uint8)
-    if style == ' outline':
+    if style == 'outline':
         for edge in edges:
             mask[edge.min_row, edge.min_col:edge.max_col] = 1
             mask[edge.max_row, edge.min_col:edge.max_col] = 1
