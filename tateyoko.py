@@ -287,33 +287,37 @@ class BorderEdge:
             self.min_row = self.min_row
             min_num_chars = max(border_mask.shape)
             while self.min_row < self.max_row:
-                num_chars = sum(border_mask[self.min_row, self.min_col:self.max_col])
-                if num_chars > min_num_chars:
+                num_border_pixels = sum(border_mask[self.min_row, self.min_col:self.max_col])
+                num_char_pixels = sum(character_mask[self.min_row, self.min_col:self.max_col])
+                if num_char_pixels == 0 and num_border_pixels > min_num_chars:
                     break
-                min_num_chars = num_chars
+                min_num_chars = num_border_pixels
                 self.min_row += 1
             min_num_chars = max(border_mask.shape)
             while self.max_row > self.min_row:
-                num_chars = sum(border_mask[self.max_row, self.min_col:self.max_col])
-                if num_chars > min_num_chars:
+                num_border_pixels = sum(border_mask[self.max_row, self.min_col:self.max_col])
+                num_char_pixels = sum(character_mask[self.max_row, self.min_col:self.max_col])
+                if num_char_pixels == 0 and num_border_pixels > min_num_chars:
                     break
-                min_num_chars = num_chars
+                min_num_chars = num_border_pixels
                 self.max_row -= 1
         else:
             self.min_col = self.min_col
             min_num_chars = max(border_mask.shape)
             while self.min_col < self.max_col:
-                num_chars = sum(border_mask[self.min_row:self.max_row, self.min_col])
-                if num_chars > min_num_chars:
+                num_border_pixels = sum(border_mask[self.min_row:self.max_row, self.min_col])
+                num_char_pixels = sum(character_mask[self.min_row:self.max_row, self.min_col])
+                if num_char_pixels == 0 and num_border_pixels > min_num_chars:
                     break
-                min_num_chars = num_chars
+                min_num_chars = num_border_pixels
                 self.min_col += 1
             min_num_chars = max(border_mask.shape)
             while self.max_col > self.min_col:
-                num_chars = sum(border_mask[self.min_row:self.max_row, self.max_col])
-                if num_chars > min_num_chars:
+                num_border_pixels = sum(border_mask[self.min_row:self.max_row, self.max_col])
+                num_char_pixels = sum(character_mask[self.min_row:self.max_row, self.max_col])
+                if num_char_pixels == 0 and num_border_pixels > min_num_chars:
                     break
-                min_num_chars = num_chars
+                min_num_chars = num_border_pixels
                 self.max_col -= 1
 
 
