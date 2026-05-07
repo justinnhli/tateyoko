@@ -640,7 +640,9 @@ def main():
     args = arg_parser.parse_args()
     args.images = sorted(set(path.expanduser().resolve() for path in args.images))
     for image_path in args.images:
+        print(image_path)
         pipeline(image_path, args)
+        print()
 
 
 if __name__ == '__main__':
