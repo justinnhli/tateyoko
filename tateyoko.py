@@ -172,7 +172,7 @@ def find_basins(array, dimension, threshold):
             basins.append((first_value, prev_value))
             first_value = None
         prev_value = value
-    basins.append((first_value, value))
+    basins.append((first_value, prev_value))
     return basins
 
 
