@@ -578,11 +578,11 @@ def pipeline(path, args):
     STATE['filepath'] = path
     # read the image
     array = imread(path)
-    save_image(array)
+    visualize(background=array)
     check_time('read in the image')
     # crop to just the page
     array = crop(array)
-    save_image(array)
+    visualize(background=array)
     check_time('cropped the image')
     # convert to black-and-white
     array = (rgb2gray(array) * 255 > 127) * np.ones(array.shape[:2])
