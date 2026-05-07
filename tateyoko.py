@@ -93,7 +93,7 @@ def identify_characters_borders(array):
         if width < min_dimension and height < min_dimension:
             # discard small image artifacts
             continue
-        density = region.num_pixels / (width * height)
+        density = region.extent
         is_character = (
             True
             # no larger than a maximum dimension
