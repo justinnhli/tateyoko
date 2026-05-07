@@ -219,6 +219,8 @@ class Coord:
 
     def __init__(self, row, col):
         # type: (int, int) -> None
+        assert row is not None
+        assert col is not None
         self.row = row
         self.col = col
 
@@ -307,6 +309,9 @@ class BorderEdge:
         return self.orientation == 'vertical'
 
     def shrink(self, character_mask, border_mask):
+        # FIXME need to be more careful here
+        # the actual border - if one exists, could be to either side of the edge instead of being between them
+        # need to do a broader sweep to determine the best way to adjust the border
         if self.is_horizontal:
             self.min_row = self.min_row
             min_num_chars = max(border_mask.shape)
@@ -624,7 +629,7 @@ def pipeline(path, args):
         ),
     )
     check_time('visualized grid')
-    # shrink the edges to get the minimal border
+    # shrink the edges to segment attached characters
     for edge in edges:
         edge.shrink(character_mask, border_mask)
     edge_mask = create_grid_edge_mask(character_mask, edges, style='filled')
@@ -647,6 +652,8 @@ def pipeline(path, args):
         (character_mask, (0, 255, 0)),
     )
     check_time('updated characters')
+    # mark small connected regions as their respective larger regions
+    # FIXME
 
 
     return # FIXME
