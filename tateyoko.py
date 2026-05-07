@@ -281,19 +281,22 @@ class BorderEdge:
         # type: (BorderNode, BorderNode) -> None
         self.node1 = node1
         self.node2 = node2
-        self.orientation = None
-        if node1.min_row == node2.min_row and node1.max_row == node2.max_row:
-            assert self.orientation is None
-            self.orientation = 'horizontal'
-        if node1.min_col == node2.min_col and node1.max_col == node2.max_col:
-            assert self.orientation is None
-            self.orientation = 'vertical'
-        assert self.orientation is not None
         self.min_row = min(node1.min_row, node2.min_row)
         self.max_row = max(node1.max_row, node2.max_row)
         self.min_col = min(node1.min_col, node2.min_col)
         self.max_col = max(node1.max_col, node2.max_col)
-        # FIXME potentially draw boundaries to exclude the nodes
+        self.orientation = None
+        if node1.min_row == node2.min_row and node1.max_row == node2.max_row:
+            assert self.orientation is None
+            self.orientation = 'horizontal'
+            self.min_col += node1.width
+            self.max_col -= node2.width
+        if node1.min_col == node2.min_col and node1.max_col == node2.max_col:
+            assert self.orientation is None
+            self.orientation = 'vertical'
+            self.min_row += node1.height
+            self.max_row -= node2.height
+        assert self.orientation is not None
 
     @property
     def is_horizontal(self):
