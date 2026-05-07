@@ -610,7 +610,7 @@ def pipeline(path, args):
     check_time('visualized characters and borders')
     # find rows and columns where there are no characters
     # the character mask has a 1 where there are characters and 0 where there aren't
-    _, edges = build_grid(character_mask, args)
+    nodes, edges = build_grid(character_mask, args)
     visualize(
         (border_mask, (255, 255, 255)),
         (character_mask, (0, 255, 0)),
@@ -627,19 +627,16 @@ def pipeline(path, args):
     # shrink the edges to get the minimal border
     for edge in edges:
         edge.shrink(character_mask, border_mask)
+    edge_mask = create_grid_edge_mask(character_mask, edges, style='filled')
+    for node in nodes:
+        edge_mask[node.min_row:node.max_row, node.min_col:node.max_col] = 1
     visualize(
         (border_mask, (255, 255, 255)),
         (character_mask, (0, 255, 0)),
-        (
-            create_grid_edge_mask(character_mask, edges, style='filled'),
-            (255, 0, 0),
-        ),
+        (edge_mask, (255, 0, 0)),
     )
     check_time('visualized edge-minimized grid')
     # mark non-edge border regions as characters
-    edge_mask = np.zeros(character_mask.shape).astype(bool)
-    for edge in edges:
-        edge_mask[edge.min_row:edge.max_row, edge.min_col:edge.max_col] = 1
     labels, character_regions, border_regions = identify_characters_borders(
         character_mask | (border_mask & ~edge_mask).astype(bool)
     )
