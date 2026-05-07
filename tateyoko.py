@@ -575,10 +575,7 @@ def pipeline(path, args):
     character_mask = np.isin(labels, list(character_regions.keys()))
     border_mask = np.isin(labels, list(border_regions.keys()))
     visualize(
-        (
-            np.isin(labels, list(border_regions.keys())),
-            (255, 255, 255),
-        ),
+        (border_mask, (255, 255, 255)),
         (character_mask, (0, 255, 0)),
     )
     check_time('visualized characters and borders')
@@ -602,7 +599,7 @@ def pipeline(path, args):
     for edge in edges:
         edge.shrink(character_mask, border_mask)
     visualize(
-        (np.isin(labels, list(border_regions.keys())), (255, 255, 255)),
+        (border_mask, (255, 255, 255)),
         (character_mask, (0, 255, 0)),
         (
             create_grid_edge_mask(character_mask, edges, style='filled'),
