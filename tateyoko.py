@@ -176,16 +176,172 @@ def find_basins(array, dimension, threshold):
     return basins
 
 
-def create_basins_mask(character_mask, row_basins, col_basins):
+def create_grid_node_mask(character_mask, edges):
     mask = np.zeros(character_mask.shape).astype(np.uint8)
+    nodes = set()
+    for edge in edges:
+        nodes.add(edge.node1)
+        nodes.add(edge.node2)
+    for node in nodes:
+        mask[node.min_row:node.max_row, node.min_col:node.max_col] = 1
+    return mask
+
+
+def create_grid_edge_mask(character_mask, edges, style='outline'):
+    mask = np.zeros(character_mask.shape).astype(np.uint8)
+    if style == ' outline':
+        for edge in edges:
+            mask[edge.min_row, edge.min_col:edge.max_col] = 1
+            mask[edge.max_row, edge.min_col:edge.max_col] = 1
+            mask[edge.min_row:edge.max_row, edge.min_col] = 1
+            mask[edge.min_row:edge.max_row, edge.max_col] = 1
+    elif style == 'filled':
+        for edge in edges:
+            mask[edge.min_row:edge.max_row, edge.min_col:edge.max_col] = 1
+    return mask
+
+
+class Coord:
+
+    def __init__(self, row, col):
+        # type: (int, int) -> None
+        self.row = row
+        self.col = col
+
+    def __hash__(self):
+        return hash((self.row, self.col))
+
+    def __eq__(self, other):
+        return (
+            self.row == other.row
+            and self.col == other.col
+        )
+
+
+class BorderNode:
+
+    def __init__(self, upper_left, lower_right):
+        # type: (Coord, Coord) -> None
+        self.upper_left = upper_left
+        self.lower_right = lower_right
+        assert self.upper_left.row <= self.lower_right.row, (self.upper_left.row, self.lower_right.row)
+        assert self.upper_left.col <= self.lower_right.col, (self.upper_left.col, self.lower_right.col)
+
+    def __hash__(self):
+        return hash((self.upper_left, self.lower_right))
+
+    def __eq__(self, other):
+        return (
+            self.upper_left == other.upper_left
+            and self.lower_right == other.upper_left
+        )
+
+    @property
+    def min_row(self):
+        return self.upper_left.row
+
+    @property
+    def max_row(self):
+        return self.lower_right.row
+
+    @property
+    def min_col(self):
+        return self.upper_left.col
+
+    @property
+    def max_col(self):
+        return self.lower_right.col
+
+
+class BorderEdge:
+
+    def __init__(self, node1, node2):
+        # type: (BorderNode, BorderNode) -> None
+        self.node1 = node1
+        self.node2 = node2
+        self.orientation = None
+        if node1.min_row == node2.min_row and node1.max_row == node2.max_row:
+            assert self.orientation is None
+            self.orientation = 'horizontal'
+        if node1.min_col == node2.min_col and node1.max_col == node2.max_col:
+            assert self.orientation is None
+            self.orientation = 'vertical'
+        assert self.orientation is not None
+        self.min_row = min(node1.min_row, node2.min_row)
+        self.max_row = max(node1.max_row, node2.max_row)
+        self.min_col = min(node1.min_col, node2.min_col)
+        self.max_col = max(node1.max_col, node2.max_col)
+        # FIXME potentially draw boundaries to exclude the nodes
+
+    @property
+    def is_horizontal(self):
+        return self.orientation == 'horizontal'
+
+    @property
+    def is_vertical(self):
+        return self.orientation == 'vertical'
+
+    def shrink(self, character_mask, border_mask):
+        if self.is_horizontal:
+            self.min_row = self.min_row
+            min_num_chars = max(border_mask.shape)
+            while self.min_row < self.max_row:
+                num_chars = sum(border_mask[self.min_row, self.min_col:self.max_col])
+                if num_chars > min_num_chars:
+                    break
+                min_num_chars = num_chars
+                self.min_row += 1
+            min_num_chars = max(border_mask.shape)
+            while self.max_row > self.min_row:
+                num_chars = sum(border_mask[self.max_row, self.min_col:self.max_col])
+                if num_chars > min_num_chars:
+                    break
+                min_num_chars = num_chars
+                self.max_row -= 1
+        else:
+            self.min_col = self.min_col
+            min_num_chars = max(border_mask.shape)
+            while self.min_col < self.max_col:
+                num_chars = sum(border_mask[self.min_row:self.max_row, self.min_col])
+                if num_chars > min_num_chars:
+                    break
+                min_num_chars = num_chars
+                self.min_col += 1
+            min_num_chars = max(border_mask.shape)
+            while self.max_col > self.min_col:
+                num_chars = sum(border_mask[self.min_row:self.max_row, self.max_col])
+                if num_chars > min_num_chars:
+                    break
+                min_num_chars = num_chars
+                self.max_col -= 1
+
+
+def build_grid(character_mask, args):
+    row_basins = find_basins(character_mask, 'row', args.border_ratio_threshold)
+    col_basins = find_basins(character_mask, 'col', args.border_ratio_threshold)
+    nodes = {} # index by upper-left coord
     for min_row, max_row in row_basins:
         for min_col, max_col in col_basins:
-            mask[min_row:max_row, min_col:max_col] = 1
-            mask[min_row, :] = 1
-            mask[max_row, :] = 1
-            mask[:, min_col] = 1
-            mask[:, max_col] = 1
-    return mask
+            upper_left = Coord(min_row, min_col)
+            nodes[upper_left] = BorderNode(upper_left, Coord(max_row, max_col))
+    edges = []
+    prev_row = []
+    for min_row, max_row in row_basins:
+        curr_row = []
+        prev_node = None
+        for i, (min_col, max_col) in enumerate(col_basins):
+            upper_left = Coord(min_row, min_col)
+            node = nodes[upper_left]
+            # add horizontal edge
+            if prev_node is not None:
+                edges.append(BorderEdge(prev_node, node))
+            # add vertical edge
+            if prev_row:
+                edges.append(BorderEdge(prev_row[i], node))
+            prev_node = node
+            curr_row.append(node)
+        prev_row = curr_row
+    return set(nodes.values()), edges
 
 
 def hash_grid_radius_offsets(max_radius):
@@ -427,8 +583,20 @@ def pipeline(path, args):
     check_time('visualized characters and borders')
     # find rows and columns where there are no characters
     # the character mask has a 1 where there are characters and 0 where there aren't
-    row_basins = find_basins(character_mask, 'row', args.border_ratio_threshold)
-    col_basins = find_basins(character_mask, 'col', args.border_ratio_threshold)
+    _, edges = build_grid(character_mask, args)
+    visualize(
+        (border_mask, (255, 255, 255)),
+        (character_mask, (0, 255, 0)),
+        (
+            create_grid_node_mask(character_mask, edges),
+            (0, 0, 255),
+        ),
+        (
+            create_grid_edge_mask(character_mask, edges),
+            (255, 0, 0),
+        ),
+    )
+    check_time('visualized grid')
     visualize(
         (np.isin(labels, list(border_regions.keys())), (255, 255, 255)),
         (character_mask, (0, 255, 0)),
