@@ -103,7 +103,7 @@ def identify_characters_borders(array):
             and (width / height) < 10
             and (height / width) < 10
             # more than 15% of pixels are characters
-            and density > 0.15
+            and 0.15 < density < 0.90
         )
         if is_character:
             character_regions[region.label] = region
