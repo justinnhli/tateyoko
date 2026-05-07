@@ -10,9 +10,10 @@ import numpy as np
 from PIL import Image
 from imageio.v3 import imread
 from skimage.draw import line, rectangle_perimeter
-from skimage.color import rgb2gray
+from skimage.color import rgb2gray, rgb2hsv
 from skimage.measure import label as skimage_label, regionprops
-from skimage.morphology import flood
+from skimage.morphology import disk
+from skimage.filters.rank import maximum as maximum_filter
 from skimage.util import invert
 
 RNG = Random(8675309)
@@ -54,12 +55,21 @@ def save_image(array, filename=None):
 
 def crop(array):
     """Crop to the contents of the page."""
-    # assume the topleft pixel is the background and flood it
-    flood_mask = flood(array, (0, 0))
-    # label all regions that were not flooded (skimage_label() considers 0 as background by default)
-    flooded = (invert(flood_mask) * np.ones(array.shape) * 255).astype(np.uint8)
-    labels = skimage_label(flooded)
+    # identify beige (the color of the paper via HSV
+    hsv_img = rgb2hsv(array)
+    hue_img = hsv_img[:, :, 0]
+    sat_img = hsv_img[:, :, 1]
+    val_img = hsv_img[:, :, 2]
+    # create a mask then dilate it
+    beige = maximum_filter(
+        (
+            (0.10 < sat_img) & (sat_img < 0.25)
+            & (0.75 < val_img) & (val_img < 0.90)
+        ).astype(np.uint8),
+        disk(min(array.shape[:2]) // 150),
+    )
     # find the largest region
+    labels = skimage_label(beige)
     largest_region = max(
         regionprops(labels),
         key=(lambda region: region.area),
@@ -565,15 +575,15 @@ def pipeline(path, args):
     STATE['filepath'] = path
     # read the image
     array = imread(path)
-    check_time('read in the image')
     save_image(array)
+    check_time('read in the image')
+    # crop to just the page
+    array = crop(array)
+    save_image(array)
+    check_time('cropped the image')
     # convert to black-and-white
     array = (rgb2gray(array) * 255 > 127) * np.ones(array.shape[:2])
     array = (array * 255).astype(np.uint8)
-    # crop to just the page
-    array = crop(array)
-    check_time('cropped the image')
-    save_image(array)
     # separate characters from borders
     array = invert(array)
     labels, character_regions, border_regions = identify_characters_borders(array)
