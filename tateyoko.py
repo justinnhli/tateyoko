@@ -612,6 +612,20 @@ def pipeline(path, args):
         ),
     )
     check_time('visualized edge-minimized grid')
+    # mark non-edge border regions as characters
+    edge_mask = np.zeros(character_mask.shape).astype(bool)
+    for edge in edges:
+        edge_mask[edge.min_row:edge.max_row, edge.min_col:edge.max_col] = 1
+    labels, character_regions, border_regions = identify_characters_borders(
+        character_mask | (border_mask & ~edge_mask).astype(bool)
+    )
+    character_mask = np.isin(labels, list(character_regions.keys()))
+    border_mask = (border_mask & ~character_mask)
+    visualize(
+        (border_mask, (255, 255, 255)),
+        (character_mask, (0, 255, 0)),
+    )
+    check_time('updated characters')
 
 
     return # FIXME
