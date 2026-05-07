@@ -74,7 +74,7 @@ def identify_characters_borders(array):
     character_regions = {}
     border_regions = {}
     min_dimension = min(array.shape[0], array.shape[1]) // 100
-    max_dimension = min(array.shape[0], array.shape[1]) // 20
+    max_dimension = min(array.shape[0], array.shape[1]) // 4
     labels = skimage_label(array)
     for region in regionprops(labels):
         min_row, min_col, max_row, max_col = region.bbox
@@ -87,8 +87,8 @@ def identify_characters_borders(array):
         is_character = (
             True
             # no larger than a maximum dimension
-            #and width < max_dimension
-            #and height < max_dimension
+            and width < max_dimension
+            and height < max_dimension
             # aspect ratio less than 10
             and (width / height) < 10
             and (height / width) < 10
