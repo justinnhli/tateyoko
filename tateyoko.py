@@ -83,7 +83,7 @@ def crop(array):
     )
     # crop
     min_row, min_col, max_row, max_col = largest_region.bbox
-    return array[min_row:max_row, min_col:max_col]
+    return (min_row, min_col), array[min_row:max_row, min_col:max_col]
 
 
 def identify_characters_borders(array):
@@ -604,10 +604,11 @@ def pipeline(path, args):
     visualize(background=array)
     check_time('read in the image')
     # crop to just the page
-    array = crop(array)
-    visualize(background=array)
+    crop_offset, cropped_image = crop(array)
+    visualize(background=cropped_image)
     check_time('cropped the image')
     # convert to black-and-white
+    array = cropped_image
     array = (rgb2gray(array) * 255 > 127) * np.ones(array.shape[:2])
     array = (array * 255).astype(np.uint8)
     # separate characters from borders
