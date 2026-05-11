@@ -656,7 +656,11 @@ def pipeline(path, args):
     visualize(background=array)
     check_time('read in the image')
     # crop to just the page
-    crop_offset, cropped_image = crop(array)
+    if args.crop:
+        crop_offset, cropped_image = crop(array)
+    else:
+        crop_offset = (0, 0)
+        cropped_image = array
     visualize(background=cropped_image)
     check_time('cropped the image')
     # convert to black-and-white
@@ -748,6 +752,7 @@ def main():
     arg_parser = ArgumentParser()
     arg_parser.add_argument('images', metavar='image', type=Path, nargs='+')
     arg_parser.add_argument('-k', default=3, type=int)
+    arg_parser.add_argument('--crop', action='store_true')
     arg_parser.add_argument('--border-ratio-threshold', default=0.05, type=float)
     args = arg_parser.parse_args()
     args.images = sorted(set(path.expanduser().resolve() for path in args.images))
