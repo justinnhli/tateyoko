@@ -99,6 +99,31 @@ def crop(array):
     return (min_row, min_col), array[min_row:max_row, min_col:max_col]
 
 
+def region_is_character(region, min_dimension, max_dimension):
+    # type: (NDArray, int, int) -> bool
+    min_row, min_col, max_row, max_col = region.bbox
+    width = max_col - min_col # the width of the region
+    height = max_row - min_row # the height of the region
+    if width < min_dimension and height < min_dimension:
+        # discard small image artifacts
+        return False
+    density = region.extent
+    num_holes = 1 - region.euler_number
+    return (
+        True
+        # no larger than a maximum dimension
+        and width < max_dimension
+        and height < max_dimension
+        # aspect ratio less than 10
+        and (width / height) < 10
+        and (height / width) < 10
+        # more than 15% of pixels are characters
+        and 0.15 < density < 0.90
+        # not contain too many holes
+        and (num_holes / region.area) < 0.015
+    )
+
+
 def identify_characters(array):
     # type: (NDArray) -> tuple[NDArray, dict[int, RegionProperties], dict[int, RegionProperties]]
     """Identify character and border (and artifact) regions."""
@@ -108,28 +133,7 @@ def identify_characters(array):
     max_dimension = min(array.shape[0], array.shape[1]) // 4
     labels = skimage_label(array)
     for region in regionprops(labels):
-        min_row, min_col, max_row, max_col = region.bbox
-        width = max_col - min_col # the width of the region
-        height = max_row - min_row # the height of the region
-        if width < min_dimension and height < min_dimension:
-            # discard small image artifacts
-            continue
-        density = region.extent
-        num_holes = 1 - region.euler_number
-        is_character = (
-            True
-            # no larger than a maximum dimension
-            and width < max_dimension
-            and height < max_dimension
-            # aspect ratio less than 10
-            and (width / height) < 10
-            and (height / width) < 10
-            # more than 15% of pixels are characters
-            and 0.15 < density < 0.90
-            # not contain too many holes
-            and (num_holes / region.area) < 0.015
-        )
-        if is_character:
+        if region_is_character(region, min_dimension, max_dimension):
             char_regions[region.label] = region
         else:
             misc_regions[region.label] = region
