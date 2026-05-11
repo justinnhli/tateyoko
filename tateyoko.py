@@ -125,19 +125,21 @@ def region_is_character(region, min_dimension, max_dimension):
 
 
 def identify_characters(array):
-    # type: (NDArray) -> tuple[NDArray, dict[int, RegionProperties], dict[int, RegionProperties]]
+    # type: (NDArray) -> tuple[NDArray, NDArray]
     """Identify character and border (and artifact) regions."""
-    char_regions = {}
-    misc_regions = {}
+    char_regions = set()
+    misc_regions = set()
     min_dimension = min(array.shape[0], array.shape[1]) // 100
     max_dimension = min(array.shape[0], array.shape[1]) // 4
     labels = skimage_label(array)
     for region in regionprops(labels):
         if region_is_character(region, min_dimension, max_dimension):
-            char_regions[region.label] = region
+            char_regions.add(region.label)
         else:
-            misc_regions[region.label] = region
-    return labels, char_regions, misc_regions
+            misc_regions.add(region.label)
+    char_mask = np.isin(labels, list(char_regions))
+    misc_mask = np.isin(labels, list(misc_regions))
+    return char_mask, misc_mask
 
 
 def visualize(*mask_colors, background=None):
@@ -698,11 +700,9 @@ def pipeline(path, args):
     array = cropped_image
     array = (rgb2gray(array) * 255 > 127) * np.ones(array.shape[:2])
     array = (array * 255).astype(np.uint8)
-    # separate characters from borders
+    # identify characters
     array = invert(array)
-    labels, char_regions, misc_regions = identify_characters(array)
-    char_mask = np.isin(labels, list(char_regions.keys()))
-    misc_mask = np.isin(labels, list(misc_regions.keys()))
+    char_mask, misc_mask = identify_characters(array)
     visualize(
         (misc_mask, (255, 255, 255)),
         (char_mask, (0, 255, 0)),
