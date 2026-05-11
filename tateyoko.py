@@ -159,7 +159,7 @@ def visualize(*mask_colors, background=None):
             fill_value=color,
         ).filled()
     # save the image
-    save_image(result)
+    save_image(result, path=Path('intermediate'))
     return result
 
 
