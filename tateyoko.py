@@ -315,6 +315,13 @@ class BorderEdge:
     def is_vertical(self):
         return self.orientation == 'vertical'
 
+    @property
+    def width(self):
+        if self.is_horizontal:
+            return self.max_row - self.min_row
+        else:
+            return self.max_col - self.min_col
+
     def shrink(self, character_mask, border_mask):
         # FIXME need to be more careful here
         # the actual border - if one exists, could be to either side of the edge instead of being between them
