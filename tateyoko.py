@@ -664,13 +664,13 @@ def get_ocr_results(image_path, crop_offset):
         json_path = temp_dir_path / image_path.with_suffix('.json').name
         with json_path.open() as fd:
             json = open_json(fd)
-    bboxes = []
+    bboxes = {}
     for text_area in json['contents'][0]:
         min_col, min_row = text_area['boundingBox'][0]
         max_col, max_row = text_area['boundingBox'][-1]
         min_row -= crop_offset[0]
         min_col -= crop_offset[1]
-        bboxes.append((text_area['id'], (min_col, min_row, max_col, max_row)))
+        bboxes[text_area['id']] = (min_col, min_row, max_col, max_row)
     return bboxes
 
 
@@ -710,7 +710,7 @@ def pipeline(path, args):
     char_to_ocr = defaultdict(set)
     ocr_to_char = defaultdict(set)
     ocr_mask = np.zeros(char_mask.shape).astype(np.uint8)
-    for ocr_id, (ocr_min_col, ocr_min_row, ocr_max_col, ocr_max_row) in ocr_bboxes:
+    for ocr_id, (ocr_min_col, ocr_min_row, ocr_max_col, ocr_max_row) in ocr_bboxes.items():
         if ocr_max_col == ocr_mask.shape[1]:
             ocr_max_col -= 1
         if ocr_max_row == ocr_mask.shape[0]:
