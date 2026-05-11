@@ -1,0 +1,14 @@
+1. rewrite initial cropping code
+2. tweak characters and borders post edge shrinkage
+    remove borders still touching characters
+    set non-edge pixels as characters (if pass previous criteria)
+
+
+1. rewrite initial cropping code
+    Instead of using largest remaining region, collectively remove regions containing all four corners instead
+2. tweak characters and borders post edge shrinkage
+    remove borders still touching characters
+    set non-edge pixels as characters (if pass previous criteria)
+3. FIXME something with merging the regions
+4. FIXME recourse into regions and clean things u
+FIXME what would happen to images without borders with the current approach?
