@@ -44,12 +44,19 @@ def check_time(message=''):
     STATE['time'] = curr_time
 
 
-def save_image(array, filename=None):
+def save_image(array, path=None, filename=None):
     """Save the array as an image, with an auto-incremented filename."""
+    if path is None:
+        path = Path()
+    path = path.expanduser().resolve()
+    if not path.exists():
+        path.mkdir(parents=True)
     image = Image.fromarray(array)
     if filename is None:
         filename = f'{STATE["filepath"].stem}-step{STATE["step"]:02d}.png'
-    image.save(filename)
+    elif not filename.endswith('.png'):
+        filename += '.png'
+    image.save(path / filename)
     STATE['step'] += 1
 
 
