@@ -163,6 +163,33 @@ def visualize(*mask_colors, background=None):
     return result
 
 
+def export_all_text(array, border_mask, character_mask, crop_offset):
+    directory = Path() / 'output' / STATE['filepath'].stem
+    # empty the directory
+    for f in directory.glob('*.png'):
+        f.unlink()
+    # export each line of text
+    labels = skimage_label(~border_mask)
+    for region in regionprops(labels):
+        min_row, min_col, max_row, max_col = region.bbox
+        # ignore regions that don't have characters
+        if not character_mask[min_row:max_row, min_col:max_col].any():
+            continue
+        row_offset, col_offset = crop_offset
+        filename = '_'.join([
+            STATE['filepath'].stem,
+            f'r{min_row + row_offset}',
+            f'c{min_col + col_offset}',
+            f'r{max_row + row_offset}',
+            f'c{max_col + col_offset}',
+        ])
+        save_image(
+            array[min_row:max_row, min_col:max_col],
+            path=Path() / 'output' / STATE['filepath'].stem,
+            filename=(filename + '.png'),
+        )
+
+
 def sum_dimension(array, dimension):
     """Sum an array along the rows or the columns."""
     if dimension == 'row':
@@ -669,7 +696,16 @@ def pipeline(path, args):
     check_time('updated characters')
     # mark small connected regions as their respective larger regions
     # FIXME
-
+    # crop out individual character lines
+    export_all_text(
+        cropped_image, 
+        (
+            create_grid_node_mask(character_mask, edges)
+            | create_grid_edge_mask(character_mask, edges, style='filled')
+        ),
+        character_mask,
+        crop_offset,
+    )
 
     return # FIXME
     # find nearest neighbors and visualize
