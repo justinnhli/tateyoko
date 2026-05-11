@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 
+# pylint: disable = missing-function-docstring
+
 from argparse import ArgumentParser
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from random import Random
+from typing import TypedDict
 
 import numpy as np
+from numpy.typing import NDArray
 from PIL import Image
 from imageio.v3 import imread
 from skimage.draw import line, rectangle_perimeter
@@ -19,21 +23,25 @@ from skimage.util import invert
 RNG = Random(8675309)
 
 Line = tuple[tuple[float, float], tuple[float, float]]
+Color = tuple[int, int, int]
+State = TypedDict('State', {'filepath': Path, 'step': int, 'time': datetime})
 
 STATE = {
     'filepath': Path(),
     'step': 0,
     'time': datetime.now(),
-}
+} # type: State
 
 
 def reset_state():
+    # type: () -> None
     STATE['filepath'] = Path()
     STATE['step'] = 0
     STATE['time'] = datetime.now()
 
 
 def check_time(message=''):
+    # type: (str) -> None
     """Print out the current and elapsed time."""
     prev_time = STATE['time']
     curr_time = datetime.now()
@@ -45,6 +53,7 @@ def check_time(message=''):
 
 
 def save_image(array, path=None, filename=None):
+    # type: (NDArray, Path, str) -> None
     """Save the array as an image, with an auto-incremented filename."""
     if path is None:
         path = Path()
@@ -61,8 +70,9 @@ def save_image(array, path=None, filename=None):
 
 
 def crop(array):
+    # type: (NDArray) -> tuple[tuple[int, int], NDArray]
     """Crop to the contents of the page."""
-    # identify beige (the color of the paper via HSV
+    # identify beige (the color of the paper) via HSV
     hsv_img = rgb2hsv(array)
     hue_img = hsv_img[:, :, 0]
     sat_img = hsv_img[:, :, 1]
@@ -87,6 +97,7 @@ def crop(array):
 
 
 def identify_characters_borders(array):
+    # type: (NDArray) -> tuple[NDArray, dict[int, RegionProperties], dict[int, RegionProperties]]
     """Identify character and border (and artifact) regions."""
     character_regions = {}
     border_regions = {}
@@ -123,6 +134,7 @@ def identify_characters_borders(array):
 
 
 def visualize(*mask_colors, background=None):
+    # type: (*tuple[NDArray, Color], NDArray) -> None
     """Visualize masks on a background.
 
     Colors are always integer RGB tuples.
@@ -164,6 +176,7 @@ def visualize(*mask_colors, background=None):
 
 
 def export_all_text(array, border_mask, character_mask, crop_offset):
+    # type: (NDArray, NDArray, NDArray, tuple[int, int]) -> None
     directory = Path() / 'output' / STATE['filepath'].stem
     # empty the directory
     for f in directory.glob('*.png'):
@@ -191,6 +204,7 @@ def export_all_text(array, border_mask, character_mask, crop_offset):
 
 
 def sum_dimension(array, dimension):
+    # type: (NDArray, str) -> NDArray
     """Sum an array along the rows or the columns."""
     if dimension == 'row':
         return np.sum(array, axis=1)
@@ -204,6 +218,7 @@ def sum_dimension(array, dimension):
 
 
 def find_basins(array, dimension, threshold):
+    # type: (NDArray, str, float) -> list[tuple[int, int]]
     # count the pixels along the dimension
     pixel_counts = sum_dimension(array, dimension)
     character_ratios = pixel_counts / len(pixel_counts)
@@ -224,6 +239,7 @@ def find_basins(array, dimension, threshold):
 
 
 def create_grid_node_mask(character_mask, edges):
+    # type: (NDArray, list[BorderEdge]) -> NDArray
     mask = np.zeros(character_mask.shape).astype(np.uint8)
     nodes = set()
     for edge in edges:
@@ -235,6 +251,7 @@ def create_grid_node_mask(character_mask, edges):
 
 
 def create_grid_edge_mask(character_mask, edges, style='outline'):
+    # type: (NDArray, list[BorderEdge], str) -> NDArray
     assert style in ['outline', 'filled']
     mask = np.zeros(character_mask.shape).astype(np.uint8)
     if style == 'outline':
@@ -631,6 +648,7 @@ def visualize_components(regions, labels, components):
 
 
 def pipeline(path, args):
+    # type: (Path, dict[str, Any]) -> None
     reset_state()
     STATE['filepath'] = path
     # read the image
@@ -698,7 +716,7 @@ def pipeline(path, args):
     # FIXME
     # crop out individual character lines
     export_all_text(
-        cropped_image, 
+        cropped_image,
         (
             create_grid_node_mask(character_mask, edges)
             | create_grid_edge_mask(character_mask, edges, style='filled')
@@ -726,6 +744,7 @@ def pipeline(path, args):
 
 
 def main():
+    # type: () -> None
     arg_parser = ArgumentParser()
     arg_parser.add_argument('images', metavar='image', type=Path, nargs='+')
     arg_parser.add_argument('-k', default=3, type=int)
