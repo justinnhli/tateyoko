@@ -704,6 +704,40 @@ def pipeline(path, args):
         (character_mask, (0, 255, 0)),
     )
     check_time('visualized characters and borders')
+    # get OCR text regions
+    ocr_bboxes = get_ocr_results(path, crop_offset)
+    # associate characters with OCR regions (FIXME unoptimized)
+    character_to_ocr = defaultdict(set)
+    ocr_to_character = defaultdict(set)
+    ocr_mask = np.zeros(character_mask.shape).astype(np.uint8)
+    for ocr_id, (ocr_min_col, ocr_min_row, ocr_max_col, ocr_max_row) in ocr_bboxes:
+        if ocr_max_col == ocr_mask.shape[1]:
+            ocr_max_col -= 1
+        if ocr_max_row == ocr_mask.shape[0]:
+            ocr_max_row -= 1
+        ocr_mask[ocr_min_row, ocr_min_col:ocr_max_col] = 1
+        ocr_mask[ocr_max_row, ocr_min_col:ocr_max_col] = 1
+        ocr_mask[ocr_min_row:ocr_max_row, ocr_min_col] = 1
+        ocr_mask[ocr_min_row:ocr_max_row, ocr_max_col] = 1
+        for region_id, region in character_regions.items():
+            char_min_row, char_min_col, char_max_row, char_max_col = region.bbox
+            intersects = (
+                (
+                    char_min_row <= ocr_min_row < char_max_row
+                    or ocr_min_row <= char_min_row < ocr_max_row
+                ) and (
+                    char_min_col <= ocr_min_col < char_max_col
+                    or ocr_min_col <= char_min_col < ocr_max_col
+                )
+            )
+            if intersects:
+                character_to_ocr[region_id].add(ocr_id)
+                ocr_to_character[ocr_id].add(region_id)
+    visualize(
+        (border_mask, (255, 255, 255)),
+        (character_mask, (0, 255, 0)),
+        (ocr_mask, (0, 0, 255)),
+    )
     # find rows and columns where there are no characters
     # the character mask has a 1 where there are characters and 0 where there aren't
     nodes, edges = build_grid(character_mask, args)
