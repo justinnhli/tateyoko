@@ -742,6 +742,28 @@ def pipeline(path, args):
         (char_mask, (0, 255, 0)),
         (ocr_mask, (0, 0, 255)),
     )
+    # mark other pixels within bounding boxes as characters
+    min_dimension = min(array.shape[0], array.shape[1]) // 100
+    max_dimension = min(array.shape[0], array.shape[1]) // 4
+    for ocr_id, (ocr_min_col, ocr_min_row, ocr_max_col, ocr_max_row) in ocr_bboxes.items():
+        if ocr_max_col == ocr_mask.shape[1]:
+            ocr_max_col -= 1
+        if ocr_max_row == ocr_mask.shape[0]:
+            ocr_max_row -= 1
+        temp_mask = np.zeros(char_mask.shape).astype(np.uint8)
+        temp_mask[ocr_min_row:ocr_max_col, ocr_min_col:ocr_max_col] = 1
+        temp_mask = temp_mask & misc_mask
+        labels = skimage_label(temp_mask)
+        for region in regionprops(labels):
+            if region_is_character(region, min_dimension, max_dimension):
+                char_mask = char_mask | temp_mask
+                misc_mask = misc_mask - temp_mask
+    visualize(
+        (misc_mask, (255, 255, 255)),
+        (char_mask, (0, 255, 0)),
+        (ocr_mask, (0, 0, 255)),
+    )
+    return
     # find rows and columns where there are no characters
     # the character mask has a 1 where there are characters and 0 where there aren't
     nodes, edges = build_grid(char_mask, args)
