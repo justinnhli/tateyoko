@@ -3,10 +3,13 @@
 # pylint: disable = missing-function-docstring
 
 from argparse import ArgumentParser
+from json import load as open_json
+from subprocess import run
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from random import Random
+from tempfile import TemporaryDirectory
 from typing import TypedDict
 
 import numpy as np
@@ -645,6 +648,30 @@ def visualize_components(regions, labels, components):
         array[perimeter_mask] = rgb
     save_image(array)
     return array
+
+
+def get_ocr_results(image_path, crop_offset):
+    with TemporaryDirectory() as temp_dir:
+        temp_dir_path = Path(temp_dir).resolve()
+        run(
+            [
+                str(Path('run-ocr.sh').resolve()),
+                '--sourceimg', str(image_path),
+                '--output', str(temp_dir_path),
+            ],
+            check=True,
+        )
+        json_path = temp_dir_path / image_path.with_suffix('.json').name
+        with json_path.open() as fd:
+            json = open_json(fd)
+    bboxes = []
+    for text_area in json['contents'][0]:
+        min_col, min_row = text_area['boundingBox'][0]
+        max_col, max_row = text_area['boundingBox'][-1]
+        min_row -= crop_offset[0]
+        min_col -= crop_offset[1]
+        bboxes.append((text_area['id'], (min_col, min_row, max_col, max_row)))
+    return bboxes
 
 
 def pipeline(path, args):
