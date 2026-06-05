@@ -99,11 +99,11 @@ def crop(array):
     return (min_row, min_col), array[min_row:max_row, min_col:max_col]
 
 
-def identify_characters_borders(array):
+def identify_characters(array):
     # type: (NDArray) -> tuple[NDArray, dict[int, RegionProperties], dict[int, RegionProperties]]
     """Identify character and border (and artifact) regions."""
-    character_regions = {}
-    border_regions = {}
+    char_regions = {}
+    misc_regions = {}
     min_dimension = min(array.shape[0], array.shape[1]) // 100
     max_dimension = min(array.shape[0], array.shape[1]) // 4
     labels = skimage_label(array)
@@ -130,10 +130,10 @@ def identify_characters_borders(array):
             and (num_holes / region.area) < 0.015
         )
         if is_character:
-            character_regions[region.label] = region
+            char_regions[region.label] = region
         else:
-            border_regions[region.label] = region
-    return labels, character_regions, border_regions
+            misc_regions[region.label] = region
+    return labels, char_regions, misc_regions
 
 
 def visualize(*mask_colors, background=None):
@@ -178,7 +178,7 @@ def visualize(*mask_colors, background=None):
     return result
 
 
-def export_all_text(array, border_mask, character_mask, crop_offset):
+def export_all_text(array, border_mask, char_mask, crop_offset):
     # type: (NDArray, NDArray, NDArray, tuple[int, int]) -> None
     directory = Path() / 'output' / STATE['filepath'].stem
     # empty the directory
@@ -189,7 +189,7 @@ def export_all_text(array, border_mask, character_mask, crop_offset):
     for region in regionprops(labels):
         min_row, min_col, max_row, max_col = region.bbox
         # ignore regions that don't have characters
-        if not character_mask[min_row:max_row, min_col:max_col].any():
+        if not char_mask[min_row:max_row, min_col:max_col].any():
             continue
         row_offset, col_offset = crop_offset
         filename = '_'.join([
@@ -224,8 +224,8 @@ def find_basins(array, dimension, threshold):
     # type: (NDArray, str, float) -> list[tuple[int, int]]
     # count the pixels along the dimension
     pixel_counts = sum_dimension(array, dimension)
-    character_ratios = pixel_counts / len(pixel_counts)
-    valleys = np.nonzero(character_ratios < threshold)[0]
+    char_ratios = pixel_counts / len(pixel_counts)
+    valleys = np.nonzero(char_ratios < threshold)[0]
     basins = [] # type: list[tuple[int, int]]
     first_value = None
     prev_value = None
@@ -241,9 +241,9 @@ def find_basins(array, dimension, threshold):
     return basins
 
 
-def create_grid_node_mask(character_mask, edges):
+def create_grid_node_mask(char_mask, edges):
     # type: (NDArray, list[BorderEdge]) -> NDArray
-    mask = np.zeros(character_mask.shape).astype(np.uint8)
+    mask = np.zeros(char_mask.shape).astype(np.uint8)
     nodes = set()
     for edge in edges:
         nodes.add(edge.node1)
@@ -253,10 +253,10 @@ def create_grid_node_mask(character_mask, edges):
     return mask
 
 
-def create_grid_edge_mask(character_mask, edges, style='outline'):
+def create_grid_edge_mask(char_mask, edges, style='outline'):
     # type: (NDArray, list[BorderEdge], str) -> NDArray
     assert style in ['outline', 'filled']
-    mask = np.zeros(character_mask.shape).astype(np.uint8)
+    mask = np.zeros(char_mask.shape).astype(np.uint8)
     if style == 'outline':
         for edge in edges:
             mask[edge.min_row, edge.min_col:edge.max_col] = 1
@@ -369,7 +369,7 @@ class BorderEdge:
         else:
             return self.max_col - self.min_col
 
-    def shrink(self, character_mask, border_mask):
+    def shrink(self, char_mask, border_mask):
         # FIXME need to be more careful here
         # the actual border - if one exists, could be to either side of the edge instead of being between them
         # need to do a broader sweep to determine the best way to adjust the border
@@ -378,7 +378,7 @@ class BorderEdge:
             min_num_chars = max(border_mask.shape)
             while self.min_row < self.max_row:
                 num_border_pixels = sum(border_mask[self.min_row, self.min_col:self.max_col])
-                num_char_pixels = sum(character_mask[self.min_row, self.min_col:self.max_col])
+                num_char_pixels = sum(char_mask[self.min_row, self.min_col:self.max_col])
                 if num_char_pixels == 0 and num_border_pixels > min_num_chars:
                     break
                 min_num_chars = num_border_pixels
@@ -386,7 +386,7 @@ class BorderEdge:
             min_num_chars = max(border_mask.shape)
             while self.max_row > self.min_row:
                 num_border_pixels = sum(border_mask[self.max_row, self.min_col:self.max_col])
-                num_char_pixels = sum(character_mask[self.max_row, self.min_col:self.max_col])
+                num_char_pixels = sum(char_mask[self.max_row, self.min_col:self.max_col])
                 if num_char_pixels == 0 and num_border_pixels > min_num_chars:
                     break
                 min_num_chars = num_border_pixels
@@ -396,7 +396,7 @@ class BorderEdge:
             min_num_chars = max(border_mask.shape)
             while self.min_col < self.max_col:
                 num_border_pixels = sum(border_mask[self.min_row:self.max_row, self.min_col])
-                num_char_pixels = sum(character_mask[self.min_row:self.max_row, self.min_col])
+                num_char_pixels = sum(char_mask[self.min_row:self.max_row, self.min_col])
                 if num_char_pixels == 0 and num_border_pixels > min_num_chars:
                     break
                 min_num_chars = num_border_pixels
@@ -404,16 +404,16 @@ class BorderEdge:
             min_num_chars = max(border_mask.shape)
             while self.max_col > self.min_col:
                 num_border_pixels = sum(border_mask[self.min_row:self.max_row, self.max_col])
-                num_char_pixels = sum(character_mask[self.min_row:self.max_row, self.max_col])
+                num_char_pixels = sum(char_mask[self.min_row:self.max_row, self.max_col])
                 if num_char_pixels == 0 and num_border_pixels > min_num_chars:
                     break
                 min_num_chars = num_border_pixels
                 self.max_col -= 1
 
 
-def build_grid(character_mask, args):
-    row_basins = find_basins(character_mask, 'row', args.border_ratio_threshold)
-    col_basins = find_basins(character_mask, 'col', args.border_ratio_threshold)
+def build_grid(char_mask, args):
+    row_basins = find_basins(char_mask, 'row', args.border_ratio_threshold)
+    col_basins = find_basins(char_mask, 'col', args.border_ratio_threshold)
     nodes = {} # index by upper-left coord
     for min_row, max_row in row_basins:
         for min_col, max_col in col_basins:
@@ -696,20 +696,20 @@ def pipeline(path, args):
     array = (array * 255).astype(np.uint8)
     # separate characters from borders
     array = invert(array)
-    labels, character_regions, border_regions = identify_characters_borders(array)
-    character_mask = np.isin(labels, list(character_regions.keys()))
-    border_mask = np.isin(labels, list(border_regions.keys()))
+    labels, char_regions, misc_regions = identify_characters(array)
+    char_mask = np.isin(labels, list(char_regions.keys()))
+    misc_mask = np.isin(labels, list(misc_regions.keys()))
     visualize(
-        (border_mask, (255, 255, 255)),
-        (character_mask, (0, 255, 0)),
+        (misc_mask, (255, 255, 255)),
+        (char_mask, (0, 255, 0)),
     )
     check_time('visualized characters and borders')
     # get OCR text regions
     ocr_bboxes = get_ocr_results(path, crop_offset)
     # associate characters with OCR regions (FIXME unoptimized)
-    character_to_ocr = defaultdict(set)
-    ocr_to_character = defaultdict(set)
-    ocr_mask = np.zeros(character_mask.shape).astype(np.uint8)
+    char_to_ocr = defaultdict(set)
+    ocr_to_char = defaultdict(set)
+    ocr_mask = np.zeros(char_mask.shape).astype(np.uint8)
     for ocr_id, (ocr_min_col, ocr_min_row, ocr_max_col, ocr_max_row) in ocr_bboxes:
         if ocr_max_col == ocr_mask.shape[1]:
             ocr_max_col -= 1
@@ -719,7 +719,7 @@ def pipeline(path, args):
         ocr_mask[ocr_max_row, ocr_min_col:ocr_max_col] = 1
         ocr_mask[ocr_min_row:ocr_max_row, ocr_min_col] = 1
         ocr_mask[ocr_min_row:ocr_max_row, ocr_max_col] = 1
-        for region_id, region in character_regions.items():
+        for region_id, region in char_regions.items():
             char_min_row, char_min_col, char_max_row, char_max_col = region.bbox
             intersects = (
                 (
@@ -731,50 +731,50 @@ def pipeline(path, args):
                 )
             )
             if intersects:
-                character_to_ocr[region_id].add(ocr_id)
-                ocr_to_character[ocr_id].add(region_id)
+                char_to_ocr[region_id].add(ocr_id)
+                ocr_to_char[ocr_id].add(region_id)
     visualize(
-        (border_mask, (255, 255, 255)),
-        (character_mask, (0, 255, 0)),
+        (misc_mask, (255, 255, 255)),
+        (char_mask, (0, 255, 0)),
         (ocr_mask, (0, 0, 255)),
     )
     # find rows and columns where there are no characters
     # the character mask has a 1 where there are characters and 0 where there aren't
-    nodes, edges = build_grid(character_mask, args)
+    nodes, edges = build_grid(char_mask, args)
     visualize(
-        (border_mask, (255, 255, 255)),
-        (character_mask, (0, 255, 0)),
+        (misc_mask, (255, 255, 255)),
+        (char_mask, (0, 255, 0)),
         (
-            create_grid_node_mask(character_mask, edges),
+            create_grid_node_mask(char_mask, edges),
             (0, 0, 255),
         ),
         (
-            create_grid_edge_mask(character_mask, edges),
+            create_grid_edge_mask(char_mask, edges),
             (255, 0, 0),
         ),
     )
     check_time('visualized grid')
     # shrink the edges to segment attached characters
     for edge in edges:
-        edge.shrink(character_mask, border_mask)
-    edge_mask = create_grid_edge_mask(character_mask, edges, style='filled')
+        edge.shrink(char_mask, misc_mask)
+    edge_mask = create_grid_edge_mask(char_mask, edges, style='filled')
     for node in nodes:
         edge_mask[node.min_row:node.max_row, node.min_col:node.max_col] = 1
     visualize(
-        (border_mask, (255, 255, 255)),
-        (character_mask, (0, 255, 0)),
+        (misc_mask, (255, 255, 255)),
+        (char_mask, (0, 255, 0)),
         (edge_mask, (255, 0, 0)),
     )
     check_time('visualized edge-minimized grid')
     # mark non-edge border regions as characters
-    labels, character_regions, border_regions = identify_characters_borders(
-        character_mask | (border_mask & ~edge_mask).astype(bool)
+    labels, char_regions, misc_regions = identify_characters(
+        char_mask | (misc_mask & ~edge_mask).astype(bool)
     )
-    character_mask = np.isin(labels, list(character_regions.keys()))
-    border_mask = (border_mask & ~character_mask)
+    char_mask = np.isin(labels, list(char_regions.keys()))
+    misc_mask = (misc_mask & ~char_mask)
     visualize(
-        (border_mask, (255, 255, 255)),
-        (character_mask, (0, 255, 0)),
+        (misc_mask, (255, 255, 255)),
+        (char_mask, (0, 255, 0)),
     )
     check_time('updated characters')
     # mark small connected regions as their respective larger regions
@@ -783,20 +783,20 @@ def pipeline(path, args):
     export_all_text(
         cropped_image,
         (
-            create_grid_node_mask(character_mask, edges)
-            | create_grid_edge_mask(character_mask, edges, style='filled')
+            create_grid_node_mask(char_mask, edges)
+            | create_grid_edge_mask(char_mask, edges, style='filled')
         ),
-        character_mask,
+        char_mask,
         crop_offset,
     )
 
     return # FIXME
     # find nearest neighbors and visualize
-    border_mask = np.zeros(labels.shape).astype(bool)
-    border_mask[np.isin(labels, list(border_regions.keys()))] = True
-    border_coords = set(zip(*np.nonzero(border_mask)))
+    misc_mask = np.zeros(labels.shape).astype(bool)
+    misc_mask[np.isin(labels, list(misc_regions.keys()))] = True
+    border_coords = set(zip(*np.nonzero(misc_mask)))
     nearest_neighbors = k_nearest_neighbors_hash(
-        character_regions.values(),
+        char_regions.values(),
         args.k,
         min(array.shape[0], array.shape[1]) // 20,
         border_coords,
@@ -804,7 +804,7 @@ def pipeline(path, args):
     check_time('found the k nearest neighbors')
     components = find_connected_components(nearest_neighbors)
     check_time('found the connected components')
-    visualize_components(character_regions, labels, components)
+    visualize_components(char_regions, labels, components)
     check_time('visualized connected components')
 
 
