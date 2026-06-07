@@ -185,6 +185,28 @@ class AABBTree:
                 min_priority = priority
         return min_index
 
+    def _optimize_node(self, node):
+        # type: (AABBNode) -> AABBNode
+        """Optimize this node heuristically.
+
+        The goal here is to make the tree more efficient by considering
+        all arrangements of descendants up to depth d. d = 1 is trivial,
+        since there is only one way to arrange two children, but d = 2
+        (and therefore up to 2^2 = 4 subtrees) has 14:
+        
+        * 2 cases where all four subtrees are at the same depth
+        * 12 cases where the four subtrees form a degenerate tree
+        
+        As the recursion pops back up to the root, at each node, consider
+        which of these arrangements has the "best" split. Parallels could
+        be drawn with how binary search trees "rotate" on the way up after
+        insertion/removal. For AABB trees, this is still only a heuristic,
+        but as depth d increases, the tree will be increasingly optimized,
+        at the cost of exponential computation time (in the extreme case,
+        a large enough d would encompass all nodes in a subtree).
+        """
+        return node # TODO
+
     def _add_iterative(self, bounding_box, value):
         # type: (BoundingBox, Any) -> None
         # do this iteratively to avoid recursion depth limits
@@ -214,7 +236,7 @@ class AABBTree:
         # pop back up the stack, setting the children along the way
         for node, child_index in reversed(stack):
             node.set_child(child_index, new_node)
-            new_node = node
+            new_node = self._optimize_node(node)
         self.root = new_node.children[0]
 
     def remove(self, bounding_box, value=None):
@@ -242,6 +264,7 @@ class AABBTree:
             else:
                 new_children.append(child)
         # FIXME assumes two children
+        # FIXME use self._optimize_node()
         if new_children[0] is None:
             return new_children[1]
         elif new_children[1] is None:
