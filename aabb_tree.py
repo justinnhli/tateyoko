@@ -315,21 +315,17 @@ class AABBTree:
     def get_intersections_with(self, bounding_box):
         # type: (BoundingBox) -> Iterator[Any]
         """Get all bounding boxes that intersect with the given bounding box."""
-        yield from self._get_intersections_with(bounding_box, self.root)
-
-    def _get_intersections_with(self, bounding_box, node):
-        # type: (BoundingBox, AABBNode) -> Iterator[Any]
-        # base case: past the leaf of the tree
-        if node is None:
+        if self.root is None:
             return
-        # base case: at the leaf of the tree
-        if node.is_leaf:
-            if node.bounding_box.intersects(bounding_box):
+        frontier = [self.root]
+        while frontier:
+            node = frontier.pop(0)
+            if not node.bounding_box.intersects(bounding_box):
+                continue
+            if node.is_leaf:
                 yield node.value
-            return
-        # recursive case: at an internal node
-        for child in node.children:
-            yield from self._get_intersections_with(bounding_box, child)
+                continue
+            frontier.extend(node.children)
 
     def pprint(self):
         # type: () -> None
