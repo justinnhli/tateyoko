@@ -163,36 +163,11 @@ class AABBTree:
         if self.root is None:
             self.root = AABBNode(bounding_box, value)
         else:
-            self.root = self._add(bounding_box, value, self.root)
+            self._add_iterative(bounding_box, value)
         self.size += 1
 
-    def _add(self, bounding_box, value, node):
-        # type: (BoundingBox, Any, AABBNode) -> AABBNode
-        # base case: at the leaf of the tree
-        if node.is_leaf:
-            return AABBNode(
-                node.bounding_box.union(bounding_box),
-                children=(
-                    node,
-                    AABBNode(bounding_box, value),
-                ),
-            )
-        # recursive case: at an internal node
+    def _best_child(self, bounding_box, node):
         # use (-utilization, area) as the heuristic priority
-        # FIXME
-        # Take a parameterizably more optimized approach by considering all
-        # possible arrangements of descendants up to depth d into full trees.
-        # The arrangement with the smallest product of priorities wins.
-        #
-        # For example, at d=1, 2^d+1 = 3 subtrees (the new node and the two
-        # children) must be arranged into two new children. Up to symmetry, the
-        # possible results are:
-        #    _        _       _
-        #   / \      / \     / \
-        #  1   _    2   _   3   _
-        #     / \      / \     / \
-        #    2   3    1   3   1   2
-
         min_index = 0
         min_priority = (INF, INF)
         priority: tuple[float, float]
@@ -208,11 +183,39 @@ class AABBTree:
             if priority < min_priority:
                 min_index = i
                 min_priority = priority
-        node.set_child(
-            min_index,
-            self._add(bounding_box, value, node.children[min_index]),
+        return min_index
+
+    def _add_iterative(self, bounding_box, value):
+        # type: (BoundingBox, Any) -> None
+        # do this iteratively to avoid recursion depth limits
+        # initialize the stack with a dummy parent of the root
+        stack = [(
+            AABBNode(
+                BoundingBox(0, 0, 0, 0),
+                children=(self.root, self.root),
+            ),
+            0,
+        )]
+        # recurse down to the leaf
+        while True:
+            parent, child_index = stack[-1]
+            node = parent.children[child_index]
+            if node.is_leaf:
+                break
+            stack.append((node, self._best_child(bounding_box, node)))
+        # create the new node (FIXME assumes two children)
+        new_node = AABBNode(
+            node.bounding_box.union(bounding_box),
+            children=(
+                node,
+                AABBNode(bounding_box, value),
+            ),
         )
-        return node
+        # pop back up the stack, setting the children along the way
+        for node, child_index in reversed(stack):
+            node.set_child(child_index, new_node)
+            new_node = node
+        self.root = new_node.children[0]
 
     def remove(self, bounding_box, value=None):
         # type: (BoundingBox, Any) -> None
@@ -238,12 +241,7 @@ class AABBTree:
                 new_children.append(self._remove(bounding_box, value, child))
             else:
                 new_children.append(child)
-        # FIXME assumes two children (AABBNode.NUM_CHILDREN == 2)
-        # FIXME
-        # As with adding, locally optimize the subtrees up to depth d, with the
-        # minimum d = 2. At d = 2, there are 2^d = 4 subtrees to arrange, with
-        # (2^d)! / 2^((2^d-1)/2) possibilities. 
-        # https://math.stackexchange.com/questions/1660397/number-of-full-orderings-in-a-full-binary-tree
+        # FIXME assumes two children
         if new_children[0] is None:
             return new_children[1]
         elif new_children[1] is None:
