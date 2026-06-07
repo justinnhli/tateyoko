@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 
-# pylint: disable = missing-function-docstring
+# pylint: disable = import-error, missing-function-docstring
 
 from argparse import ArgumentParser
-from json import load as open_json
-from subprocess import run
 from collections import defaultdict
 from datetime import datetime
+from json import load as open_json
 from pathlib import Path
 from random import Random
+from subprocess import run
 from tempfile import TemporaryDirectory
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -23,6 +23,9 @@ from skimage.morphology import disk
 from skimage.filters.rank import maximum as maximum_filter
 from skimage.util import invert
 
+from aabb_tree import BoundingBox, AABBTree
+
+
 RNG = Random(8675309)
 
 Line = tuple[tuple[float, float], tuple[float, float]]
@@ -34,6 +37,49 @@ STATE = {
     'step': 0,
     'time': datetime.now(),
 } # type: State
+
+
+
+
+def subtract_masks(large, small):
+    return (large ^ small) ^ small
+
+
+def rowcol_to_bbox(min_row, min_col, max_row, max_col):
+    return BoundingBox(
+        min_x=min_col,
+        min_y=min_row,
+        max_x=max_col,
+        max_y=max_row,
+    )
+
+
+class PixelRegion:
+    """A contiguous region of pixels."""
+
+    def __init__(self, labels_array, label, bbox=None):
+        # type: (NDArray, int, BoundingBox) -> None
+        self.labels_array = labels_array
+        self.label = label
+        self._bbox = bbox
+        self.parent: PixelRegion = None
+        self.children: list[PixelRegion] = []
+        self.siblings: list[PixelRegion] = []
+
+    @property
+    def mask(self):
+        # type: () -> NDArray
+        return self.labels_array == self.label
+
+    @property
+    def bbox(self):
+        # type: () -> BoundingBox
+        if self._bbox is None:
+            labels = skimage_label(self.mask)
+            regionprops_list = list(regionprops(labels))
+            assert len(regionprops_list) == 1
+            self._bbox = rowcol_to_bbox(*regionprops_list[0].bbox)
+        return self._bbox
 
 
 def reset_state():
@@ -99,16 +145,18 @@ def crop(array):
     return (min_row, min_col), array[min_row:max_row, min_col:max_col]
 
 
-def region_is_character(region, min_dimension, max_dimension):
-    # type: (NDArray, int, int) -> bool
-    min_row, min_col, max_row, max_col = region.bbox
+def regionprop_is_character(shape, regionprop):
+    # type: (tuple[int, int], NDArray) -> bool
+    min_dimension = min(shape[0], shape[1]) // 100
+    max_dimension = min(shape[0], shape[1]) // 4
+    min_row, min_col, max_row, max_col = regionprop.bbox
     width = max_col - min_col # the width of the region
     height = max_row - min_row # the height of the region
     if width < min_dimension and height < min_dimension:
         # discard small image artifacts
         return False
-    density = region.extent
-    num_holes = 1 - region.euler_number
+    density = regionprop.extent
+    num_holes = 1 - regionprop.euler_number
     return (
         True
         # no larger than a maximum dimension
@@ -120,30 +168,55 @@ def region_is_character(region, min_dimension, max_dimension):
         # more than 15% of pixels are characters
         and 0.15 < density < 0.90
         # not contain too many holes
-        and (num_holes / region.area) < 0.015
+        and (num_holes / regionprop.area) < 0.015
     )
 
 
 def identify_characters(array):
     # type: (NDArray) -> tuple[NDArray, NDArray]
     """Identify character and border (and artifact) regions."""
-    char_regions = set()
-    misc_regions = set()
-    min_dimension = min(array.shape[0], array.shape[1]) // 100
-    max_dimension = min(array.shape[0], array.shape[1]) // 4
+    char_regions = []
+    misc_regions = []
     labels = skimage_label(array)
-    for region in regionprops(labels):
-        if region_is_character(region, min_dimension, max_dimension):
-            char_regions.add(region.label)
+    for regionprop in regionprops(labels):
+        region = PixelRegion(
+            labels,
+            regionprop.label,
+            bbox=rowcol_to_bbox(*regionprop.bbox),
+        )
+        if regionprop_is_character(array.shape, regionprop):
+            char_regions.append(region)
         else:
-            misc_regions.add(region.label)
-    char_mask = np.isin(labels, list(char_regions))
-    misc_mask = np.isin(labels, list(misc_regions))
-    return char_mask, misc_mask
+            misc_regions.append(region)
+    return char_regions, misc_regions
 
 
-def visualize(*mask_colors, background=None):
-    # type: (*tuple[NDArray, Color], NDArray) -> None
+def regions_to_mask(regions: list[PixelRegion]) -> NDArray:
+    return np.isin(
+        regions[0].labels_array,
+        list(set(group.label for group in regions)),
+    )
+
+
+def bboxes_to_mask(
+        shape: tuple[int, int],
+        bboxes: list[BoundingBox],
+        outline=False,
+    ) -> NDArray:
+    mask = np.zeros(shape).astype(bool)
+    if outline:
+        for bbox in bboxes:
+            mask[bbox.min_y, bbox.min_x:bbox.max_x] = 1
+            mask[bbox.max_y, bbox.min_x:bbox.max_x] = 1
+            mask[bbox.min_y:bbox.max_y, bbox.min_x] = 1
+            mask[bbox.min_y:bbox.max_y, bbox.max_x] = 1
+    else:
+        for bbox in bboxes:
+            mask[bbox.min_y:bbox.max_y, bbox.min_x:bbox.max_x] = 1
+    return mask
+
+
+def visualize(*mask_colors: tuple[NDArray, Color], background: NDArray=None) -> None:
     """Visualize masks on a background.
 
     Colors are always integer RGB tuples.
@@ -284,12 +357,13 @@ class Coord:
         self.row = row
         self.col = col
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash((self.row, self.col))
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         return (
-            self.row == other.row
+            isinstance(other, Coord)
+            and self.row == other.row
             and self.col == other.col
         )
 
@@ -656,7 +730,7 @@ def visualize_components(regions, labels, components):
     return array
 
 
-def get_ocr_results(image_path, crop_offset):
+def get_ocr_results(image_path: Path, crop_offset: tuple[int, int]) -> dict[int, BoundingBox]:
     with TemporaryDirectory() as temp_dir:
         temp_dir_path = Path(temp_dir).resolve()
         run(
@@ -676,12 +750,14 @@ def get_ocr_results(image_path, crop_offset):
         max_col, max_row = text_area['boundingBox'][-1]
         min_row -= crop_offset[0]
         min_col -= crop_offset[1]
-        bboxes[text_area['id']] = (min_col, min_row, max_col, max_row)
+        bboxes[text_area['id']] = rowcol_to_bbox(
+            min_row, min_col,
+            max_row - 1, max_col - 1,
+        )
     return bboxes
 
 
-def pipeline(path, args):
-    # type: (Path, dict[str, Any]) -> None
+def pipeline(path: Path, args: dict[str, Any]) -> None:
     reset_state()
     STATE['filepath'] = path
     # read the image
@@ -700,52 +776,87 @@ def pipeline(path, args):
     array = cropped_image
     array = (rgb2gray(array) * 255 > 127) * np.ones(array.shape[:2])
     array = (array * 255).astype(np.uint8)
-    # identify characters
-    array = invert(array)
-    char_mask, misc_mask = identify_characters(array)
-    visualize(
-        (misc_mask, (255, 255, 255)),
-        (char_mask, (0, 255, 0)),
-    )
-    check_time('visualized characters and borders')
-    # get OCR text regions
+    # get OCR text bounding boxes
     ocr_bboxes = get_ocr_results(path, crop_offset)
-    ocr_mask = np.zeros(char_mask.shape).astype(np.uint8)
-    for ocr_id, (ocr_min_col, ocr_min_row, ocr_max_col, ocr_max_row) in ocr_bboxes.items():
-        if ocr_max_col == ocr_mask.shape[1]:
-            ocr_max_col -= 1
-        if ocr_max_row == ocr_mask.shape[0]:
-            ocr_max_row -= 1
-        ocr_mask[ocr_min_row, ocr_min_col:ocr_max_col] = 1
-        ocr_mask[ocr_max_row, ocr_min_col:ocr_max_col] = 1
-        ocr_mask[ocr_min_row:ocr_max_row, ocr_min_col] = 1
-        ocr_mask[ocr_min_row:ocr_max_row, ocr_max_col] = 1
     check_time('loaded OCR results')
-    # mark regions within bounding boxes as characters (FIXME unoptimized)
-    min_dimension = min(array.shape[0], array.shape[1]) // 100
-    max_dimension = min(array.shape[0], array.shape[1]) // 4
-    for ocr_id, (ocr_min_col, ocr_min_row, ocr_max_col, ocr_max_row) in ocr_bboxes.items():
-        if ocr_max_col == ocr_mask.shape[1]:
-            ocr_max_col -= 1
-        if ocr_max_row == ocr_mask.shape[0]:
-            ocr_max_row -= 1
-        temp_mask = np.zeros(char_mask.shape).astype(np.bool)
-        temp_mask[ocr_min_row:ocr_max_row, ocr_min_col:ocr_max_col] = 1
-        temp_mask = temp_mask & misc_mask
-        labels = skimage_label(temp_mask)
-        for region in regionprops(labels):
-            if region_is_character(region, min_dimension, max_dimension):
-                char_mask = char_mask | temp_mask
-                misc_mask = (misc_mask ^ temp_mask) ^ temp_mask
+    # identify character regions
+    array = invert(array)
+    char_regions, misc_regions = identify_characters(array)
     visualize(
-        (misc_mask, (255, 255, 255)),
-        (char_mask, (0, 255, 0)),
-        (ocr_mask, (0, 0, 255)),
+        (regions_to_mask(misc_regions), (255, 255, 255)),
+        (regions_to_mask(char_regions), (0, 255, 0)),
+        (bboxes_to_mask(array.shape, ocr_bboxes.values(), outline=True), (0, 0, 255)),
+    )
+    check_time('visualized characters and OCR bboxes')
+    # add regions to colliders
+    char_collider = AABBTree()
+    for region in char_regions:
+        char_collider.add(region.bbox, value=region)
+    misc_collider = AABBTree()
+    for region in misc_regions:
+        misc_collider.add(region.bbox, value=region)
+    check_time('added char/misc regions to colliders')
+    # mark regions within bounding boxes as characters
+    labels = skimage_label(
+        bboxes_to_mask(array.shape, ocr_bboxes.values())
+        & regions_to_mask(misc_regions)
+    )
+    misc_mask = regions_to_mask(misc_regions)
+    for regionprop in regionprops(labels):
+        # if the new region could not be a character, ignore it
+        if not regionprop_is_character(array.shape, regionprop):
+            continue
+        # find the parent region that it came from
+        parent = None
+        regionprop_mask = (labels == regionprop.label)
+        for parent_candidate in misc_collider.get_intersections_with(rowcol_to_bbox(*regionprop.bbox)):
+            if ((parent_candidate.mask & regionprop_mask) == regionprop_mask).all():
+                parent = parent_candidate
+                break
+        assert parent is not None
+        assert parent in misc_regions
+        # identify any "siblings", ie. parts of the parent not in the bounding boxes
+        siblings = []
+        diff_labels = skimage_label(subtract_masks(parent.mask, regionprop_mask))
+        for diff_regionprop in regionprops(diff_labels):
+            sibling = PixelRegion(
+                diff_labels,
+                diff_regionprop.label,
+                bbox=rowcol_to_bbox(*diff_regionprop.bbox),
+            )
+            sibling.parent = parent
+            siblings.append(sibling)
+        # mark the new region as a character
+        if siblings:
+            new_region = PixelRegion(
+                labels,
+                regionprop.label,
+                bbox=rowcol_to_bbox(*regionprop.bbox),
+            )
+            new_region.parent = parent
+            for sibling in siblings:
+                sibling.siblings.append(new_region)
+                new_region.siblings.append(sibling)
+            parent.children.extend(siblings)
+            parent.children.append(new_region)
+            # update regions
+            misc_regions.remove(parent)
+            char_regions.append(new_region)
+            misc_regions.extend(siblings)
+            # update the collider
+            misc_collider.remove(parent.bbox, value=parent)
+            for sibling in siblings:
+                misc_collider.add(sibling.bbox, value=sibling)
+        else:
+            char_regions.append(parent)
+            misc_regions.remove(parent)
+    visualize(
+        (regions_to_mask(misc_regions), (255, 255, 255)),
+        (regions_to_mask(char_regions), (0, 255, 0)),
+        (bboxes_to_mask(array.shape, ocr_bboxes.values(), outline=True), (0, 0, 255)),
     )
     check_time('adjusted characters based on OCR')
-    # mark misc regions that are within the bbox of characters (FIXME unoptimized)
-    pass # FIXME
-    check_time('adjusted characters based on overlapping bboxes')
+    return
     # use a discrete Fourier transform to identify gaps
     pass # FIXME
     # associate characters with OCR regions (FIXME unoptimized)
