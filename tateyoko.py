@@ -743,6 +743,11 @@ def pipeline(path, args):
         (ocr_mask, (0, 0, 255)),
     )
     check_time('adjusted characters based on OCR')
+    # mark misc regions that are within the bbox of characters (FIXME unoptimized)
+    pass # FIXME
+    check_time('adjusted characters based on overlapping bboxes')
+    # use a discrete Fourier transform to identify gaps
+    pass # FIXME
     # associate characters with OCR regions (FIXME unoptimized)
     char_to_ocr = defaultdict(set)
     ocr_to_char = defaultdict(set)
@@ -770,6 +775,11 @@ def pipeline(path, args):
         (char_mask, (0, 255, 0)),
         (ocr_mask, (0, 0, 255)),
     )
+    # expand/shrink bounding boxes
+    for ocr_id, (ocr_min_col, ocr_min_row, ocr_max_col, ocr_max_row) in list(ocr_bboxes.items()):
+        # if a bbox edge does not touch any characters, shrink it
+        # if a bbox edge does touch a character, adjust it
+        pass # FIXME
     return
     # find rows and columns where there are no characters
     # the character mask has a 1 where there are characters and 0 where there aren't
@@ -822,7 +832,6 @@ def pipeline(path, args):
         char_mask,
         crop_offset,
     )
-
     return # FIXME
     # find nearest neighbors and visualize
     misc_mask = np.zeros(labels.shape).astype(bool)
