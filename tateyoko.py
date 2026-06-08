@@ -710,9 +710,6 @@ def pipeline(path, args):
     check_time('visualized characters and borders')
     # get OCR text regions
     ocr_bboxes = get_ocr_results(path, crop_offset)
-    # associate characters with OCR regions (FIXME unoptimized)
-    char_to_ocr = defaultdict(set)
-    ocr_to_char = defaultdict(set)
     ocr_mask = np.zeros(char_mask.shape).astype(np.uint8)
     for ocr_id, (ocr_min_col, ocr_min_row, ocr_max_col, ocr_max_row) in ocr_bboxes.items():
         if ocr_max_col == ocr_mask.shape[1]:
@@ -723,6 +720,15 @@ def pipeline(path, args):
         ocr_mask[ocr_max_row, ocr_min_col:ocr_max_col] = 1
         ocr_mask[ocr_min_row:ocr_max_row, ocr_min_col] = 1
         ocr_mask[ocr_min_row:ocr_max_row, ocr_max_col] = 1
+    check_time('loaded OCR results')
+    # associate characters with OCR regions (FIXME unoptimized)
+    char_to_ocr = defaultdict(set)
+    ocr_to_char = defaultdict(set)
+    for ocr_id, (ocr_min_col, ocr_min_row, ocr_max_col, ocr_max_row) in ocr_bboxes.items():
+        if ocr_max_col == ocr_mask.shape[1]:
+            ocr_max_col -= 1
+        if ocr_max_row == ocr_mask.shape[0]:
+            ocr_max_row -= 1
         for region_id, region in char_regions.items():
             char_min_row, char_min_col, char_max_row, char_max_col = region.bbox
             intersects = (
