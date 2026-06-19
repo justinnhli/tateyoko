@@ -158,6 +158,7 @@ class AABBTree:
         return self.size
 
     def _best_child(self, bounding_box, node):
+        # type: (BoundingBox, AABBNode) -> int
         # use (-utilization, area) as the heuristic priority
         min_index = 0
         min_priority = (INF, INF)
@@ -234,9 +235,9 @@ class AABBTree:
             ),
         )
         # pop back up the stack, setting the children along the way
-        for node, child_index in reversed(stack):
-            node.set_child(child_index, new_node)
-            new_node = self._optimize_node(node)
+        for parent, child_index in reversed(stack):
+            parent.set_child(child_index, new_node)
+            new_node = self._optimize_node(parent)
         self.root = new_node.children[0]
 
     def remove(self, bounding_box, value=None):
@@ -367,7 +368,7 @@ class AABBTree:
             return
         print(''.join([
             depth * '  ' + f'{node.size}',
-            f'({node.bounding_box}; {node.used} / {node.bounding_box.area} = {node.utilization})',
+            f'({node.bounding_box}={node.value}; {node.used} / {node.bounding_box.area} = {node.utilization})',
         ]))
         #print(depth * '  ' + f'{node.size} ({node.bounding_box}; used={node.used})')
         if node.value is None:
