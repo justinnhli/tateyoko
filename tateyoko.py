@@ -2,8 +2,8 @@
 
 # pylint: disable = import-error, missing-function-docstring
 
-from argparse import ArgumentParser
-from collections import defaultdict
+from argparse import ArgumentParser, Namespace
+from collections.abc import Iterable
 from datetime import datetime
 from json import load as open_json
 from pathlib import Path
@@ -16,11 +16,10 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
 from imageio.v3 import imread
-from skimage.draw import line, rectangle_perimeter
 from skimage.color import rgb2gray, rgb2hsv
+from skimage.filters.rank import maximum as maximum_filter
 from skimage.measure import label as skimage_label, regionprops
 from skimage.morphology import disk
-from skimage.filters.rank import maximum as maximum_filter
 from skimage.util import invert
 
 from aabb_tree import BoundingBox, AABBTree
@@ -39,13 +38,13 @@ STATE = {
 } # type: State
 
 
-
-
 def subtract_masks(large, small):
+    # type: (NDArray, NDArray) -> NDArray
     return (large ^ small) ^ small
 
 
 def rowcol_to_bbox(min_row, min_col, max_row, max_col):
+    # type: (int, int, int, int) -> BoundingBox
     return BoundingBox(
         min_x=min_col,
         min_y=min_row,
@@ -173,7 +172,7 @@ def regionprop_is_character(shape, regionprop):
 
 
 def identify_characters(array):
-    # type: (NDArray) -> tuple[NDArray, NDArray]
+    # type: (NDArray) -> tuple[NDArray, NDArray, NDArray]
     """Identify character and border (and artifact) regions."""
     char_regions = []
     misc_regions = []
@@ -200,8 +199,8 @@ def regions_to_mask(regions: list[PixelRegion]) -> NDArray:
 
 def bboxes_to_mask(
         shape: tuple[int, int],
-        bboxes: list[BoundingBox],
-        outline=False,
+        bboxes: Iterable[BoundingBox],
+        outline: bool = False,
     ) -> NDArray:
     mask = np.zeros(shape).astype(bool)
     if outline:
@@ -349,6 +348,7 @@ def create_grid_edge_mask(char_mask, edges, style='outline'):
 
 
 class Coord:
+    """A 2D coordinate."""
 
     def __init__(self, row, col):
         # type: (int, int) -> None
@@ -369,6 +369,7 @@ class Coord:
 
 
 class BorderNode:
+    """A node on the grid of borders."""
 
     def __init__(self, upper_left, lower_right):
         # type: (Coord, Coord) -> None
@@ -377,41 +378,42 @@ class BorderNode:
         assert self.upper_left.row <= self.lower_right.row, (self.upper_left.row, self.lower_right.row)
         assert self.upper_left.col <= self.lower_right.col, (self.upper_left.col, self.lower_right.col)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash((self.upper_left, self.lower_right))
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         return (
             self.upper_left == other.upper_left
             and self.lower_right == other.upper_left
         )
 
     @property
-    def min_row(self):
+    def min_row(self) -> int:
         return self.upper_left.row
 
     @property
-    def max_row(self):
+    def max_row(self) -> int:
         return self.lower_right.row
 
     @property
-    def min_col(self):
+    def min_col(self) -> int:
         return self.upper_left.col
 
     @property
-    def max_col(self):
+    def max_col(self) -> int:
         return self.lower_right.col
 
     @property
-    def width(self):
+    def width(self) -> int:
         return self.lower_right.col - self.upper_left.col
 
     @property
-    def height(self):
+    def height(self) -> int:
         return self.lower_right.row - self.upper_left.row
 
 
 class BorderEdge:
+    """An edge on the grid of borders."""
 
     def __init__(self, node1, node2):
         # type: (BorderNode, BorderNode) -> None
@@ -435,21 +437,21 @@ class BorderEdge:
         assert self.orientation is not None
 
     @property
-    def is_horizontal(self):
+    def is_horizontal(self) -> bool:
         return self.orientation == 'horizontal'
 
     @property
-    def is_vertical(self):
+    def is_vertical(self) -> bool:
         return self.orientation == 'vertical'
 
     @property
-    def width(self):
+    def width(self) -> int:
         if self.is_horizontal:
             return self.max_row - self.min_row
         else:
             return self.max_col - self.min_col
 
-    def shrink(self, char_mask, border_mask):
+    def shrink(self, char_mask: NDArray, border_mask: NDArray) -> None:
         # FIXME need to be more careful here
         # the actual border - if one exists, could be to either side of the edge instead of being between them
         # need to do a broader sweep to determine the best way to adjust the border
@@ -491,7 +493,7 @@ class BorderEdge:
                 self.max_col -= 1
 
 
-def build_grid(char_mask, args):
+def build_grid(char_mask: NDArray, args: Namespace) -> tuple[set[BorderNode], list[BorderEdge]]:
     row_basins = find_basins(char_mask, 'row', args.border_ratio_threshold)
     col_basins = find_basins(char_mask, 'col', args.border_ratio_threshold)
     nodes = {} # index by upper-left coord
@@ -499,8 +501,8 @@ def build_grid(char_mask, args):
         for min_col, max_col in col_basins:
             upper_left = Coord(min_row, min_col)
             nodes[upper_left] = BorderNode(upper_left, Coord(max_row, max_col))
-    edges = []
-    prev_row = []
+    edges: list[BorderEdge] = []
+    prev_row: list[BorderNode] = []
     for min_row, max_row in row_basins:
         curr_row = []
         prev_node = None
@@ -546,7 +548,7 @@ def get_ocr_results(image_path: Path, crop_offset: tuple[int, int]) -> dict[int,
     return bboxes
 
 
-def pipeline(path: Path, args: dict[str, Any]) -> None:
+def pipeline(path: Path, args: Namespace) -> None:
     reset_state()
     STATE['filepath'] = path
     # read the image
