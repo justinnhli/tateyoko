@@ -200,16 +200,16 @@ class AABBTree:
 
     def add(self, bounding_box, value=None):
         # type: (BoundingBox, Any) -> None
-        """Add a bounding box (and optional associated value) to the tree."""
+        """Add a bounding box (and optional associated value) to the tree.
+
+        This function is iterative to avoid recursion depth limits.
+        """
+        # increment size
+        self.size += 1
+        # special case for if the tree is currently empty
         if self.root is None:
             self.root = AABBNode(bounding_box, value)
-        else:
-            self._add_iterative(bounding_box, value)
-        self.size += 1
-
-    def _add_iterative(self, bounding_box, value):
-        # type: (BoundingBox, Any) -> None
-        # do this iteratively to avoid recursion depth limits
+            return
         # initialize the stack with a dummy parent of the root
         stack = [(
             AABBNode(
