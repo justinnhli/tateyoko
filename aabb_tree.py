@@ -241,37 +241,66 @@ class AABBTree:
 
     def remove(self, bounding_box, value=None):
         # type: (BoundingBox, Any) -> None
-        """Remove a bounding box from the tree."""
-        self.root = self._remove(bounding_box, value, self.root)
+        """Remove a bounding box from the tree.
 
-    def _remove(self, bounding_box, value, node):
-        # type: (BoundingBox, Any, AABBNode) -> AABBNode
-        # base case: past the leaf of the tree
-        if node is None:
+        This function is iterative to avoid recursion depth limits.
+        """
+        if self.root is None:
             raise ValueError(f'value not in tree: {value}')
-        # base case: at the leaf of the tree
-        if node.is_leaf:
-            if node.bounding_box == bounding_box and node.value == value:
-                self.size -= 1
-                return None
+        # need a variable to ensure only the first matching element is removed
+        removed = False
+        # initialize the stack with the root
+        stack: list[tuple[AABBNode, list[AABBNode]]] = [(
+            # parent
+            self.root,
+            # new children
+            [],
+        )]
+        returned = False
+        return_value = None
+        # manage our own stack in the "recursion"
+        while stack:
+            parent, new_children = stack[-1]
+            index = len(new_children)
+            if parent.is_leaf:
+                # base case
+                if not removed and parent.bounding_box == bounding_box and parent.value == value:
+                    self.size -= 1
+                    return_value = None
+                    removed = True
+                else:
+                    return_value = parent
+                returned = True
+                stack.pop(-1)
             else:
-                return node
-        # recursive case: at an internal node
-        new_children = []
-        for child in node.children:
-            if bounding_box in child.bounding_box:
-                new_children.append(self._remove(bounding_box, value, child))
-            else:
-                new_children.append(child)
-        # FIXME assumes two children
-        # FIXME use self._optimize_node()
-        if new_children[0] is None:
-            return new_children[1]
-        elif new_children[1] is None:
-            return new_children[0]
-        else:
-            node.children = tuple(new_children)
-            return node
+                # if there is a return value, add it as a child
+                if returned:
+                    new_children.append(return_value)
+                    return_value = None
+                    returned = False
+                    index += 1
+                if index == len(parent.children):
+                    # if all the new children are there, pop up the stack
+                    # FIXME assumes two children
+                    if new_children[0] is None:
+                        return_value = new_children[1]
+                    elif new_children[1] is None:
+                        return_value = new_children[0]
+                    else:
+                        parent.children = new_children
+                        return_value = parent
+                    returned = True
+                    stack.pop(-1)
+                else:
+                    # if not, continue with its children
+                    child = parent.children[index]
+                    if not removed and child.bounding_box.intersects(bounding_box):
+                        stack.append((child, []))
+                    else:
+                        new_children.append(child)
+        self.root = return_value
+        if not removed:
+            raise ValueError(f'value not in tree: {value}')
 
     def get_all_intersections(self):
         # type: () -> Iterator[tuple[Any, Any]]
