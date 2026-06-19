@@ -157,15 +157,6 @@ class AABBTree:
         # type: () -> int
         return self.size
 
-    def add(self, bounding_box, value=None):
-        # type: (BoundingBox, Any) -> None
-        """Add a bounding box (and optional associated value) to the tree."""
-        if self.root is None:
-            self.root = AABBNode(bounding_box, value)
-        else:
-            self._add_iterative(bounding_box, value)
-        self.size += 1
-
     def _best_child(self, bounding_box, node):
         # use (-utilization, area) as the heuristic priority
         min_index = 0
@@ -206,6 +197,15 @@ class AABBTree:
         a large enough d would encompass all nodes in a subtree).
         """
         return node # TODO
+
+    def add(self, bounding_box, value=None):
+        # type: (BoundingBox, Any) -> None
+        """Add a bounding box (and optional associated value) to the tree."""
+        if self.root is None:
+            self.root = AABBNode(bounding_box, value)
+        else:
+            self._add_iterative(bounding_box, value)
+        self.size += 1
 
     def _add_iterative(self, bounding_box, value):
         # type: (BoundingBox, Any) -> None
