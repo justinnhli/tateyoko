@@ -188,7 +188,7 @@ def identify_characters(array):
             char_regions.append(region)
         else:
             misc_regions.append(region)
-    return char_regions, misc_regions
+    return labels, char_regions, misc_regions
 
 
 def regions_to_mask(regions: list[PixelRegion]) -> NDArray:
@@ -570,7 +570,7 @@ def pipeline(path: Path, args: dict[str, Any]) -> None:
     check_time('loaded OCR results')
     # identify character regions
     array = invert(array)
-    char_regions, misc_regions = identify_characters(array)
+    _, char_regions, misc_regions = identify_characters(array)
     visualize(
         (regions_to_mask(misc_regions), (255, 255, 255)),
         (regions_to_mask(char_regions), (0, 255, 0)),
@@ -645,7 +645,8 @@ def pipeline(path: Path, args: dict[str, Any]) -> None:
         (bboxes_to_mask(array.shape, ocr_bboxes.values(), outline=True), (0, 0, 255)),
     )
     check_time('adjusted characters based on OCR')
-    return
+    # mark small connected regions as their respective larger regions
+    pass # FIXME
     # use a discrete Fourier transform to identify gaps
     pass # FIXME
     '''
@@ -658,7 +659,9 @@ def pipeline(path: Path, args: dict[str, Any]) -> None:
     '''
     # find rows and columns where there are no characters
     # the character mask has a 1 where there are characters and 0 where there aren't
-    nodes, edges = build_grid(char_mask, args)
+    char_mask = regions_to_mask(char_regions) # FIXME
+    misc_mask = regions_to_mask(misc_regions) # FIXME
+    _, edges = build_grid(char_mask, args)
     visualize(
         (misc_mask, (255, 255, 255)),
         (char_mask, (0, 255, 0)),
@@ -696,6 +699,7 @@ def pipeline(path: Path, args: dict[str, Any]) -> None:
         char_mask,
         crop_offset,
     )
+    check_time('exported cropped images')
 
 
 def main():
