@@ -648,12 +648,14 @@ def pipeline(path: Path, args: dict[str, Any]) -> None:
     return
     # use a discrete Fourier transform to identify gaps
     pass # FIXME
+    '''
     # expand/shrink bounding boxes
     for ocr_id, (ocr_min_col, ocr_min_row, ocr_max_col, ocr_max_row) in list(ocr_bboxes.items()):
         # if a bbox edge does not touch any characters, shrink it
         # if a bbox edge does touch a character, adjust it
         pass # FIXME
     return
+    '''
     # find rows and columns where there are no characters
     # the character mask has a 1 where there are characters and 0 where there aren't
     nodes, edges = build_grid(char_mask, args)
@@ -670,6 +672,7 @@ def pipeline(path: Path, args: dict[str, Any]) -> None:
         ),
     )
     check_time('visualized grid')
+    '''
     # shrink the edges to segment attached characters
     for edge in edges:
         edge.shrink(char_mask, misc_mask)
@@ -682,6 +685,7 @@ def pipeline(path: Path, args: dict[str, Any]) -> None:
         (edge_mask, (255, 0, 0)),
     )
     check_time('visualized edge-minimized grid')
+    '''
     # crop out individual character lines
     export_all_text(
         cropped_image,
