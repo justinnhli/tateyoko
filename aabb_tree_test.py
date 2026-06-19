@@ -45,7 +45,9 @@ def test_aabb_tree_add(bboxes: list[BoundingBox]) -> None:
     assert len(answer) == len(set(answer))
     tree = AABBTree()
     for i, bbox in enumerate(bboxes):
+        assert len(tree) == i
         tree.add(bbox, value=i)
+        assert len(tree) == i + 1
     intersections = sorted(
         tuple(sorted(pair)) for pair
         in tree.get_all_intersections()
@@ -65,7 +67,9 @@ def test_aabb_tree_remove(bboxes: list[BoundingBox]) -> None:
     for i, bbox in enumerate(bboxes):
         tree.add(bbox, value=i)
     for i, bbox in enumerate(bboxes):
+        assert len(tree) == len(bboxes) - i
         tree.remove(bbox, value=i)
+        assert len(tree) == len(bboxes) - i - 1
         answer = [
             pair for pair in answer
             if i not in pair
